@@ -1,0 +1,10 @@
+{
+  "source": "AI4Boundaries",
+  "license": "See upstream repository and dataset terms",
+  "country": ["Global"],
+  "year": "rolling",
+  "label_type": "field_boundaries",
+  "artifact_uri": "https://github.com/waldnerf/ai4boundaries",
+  "checksum": null,
+  "prepare_recipe": "Prepare chips in shared schema, preserve region provenance, and map source labels to immutable dataset manifests."
+}

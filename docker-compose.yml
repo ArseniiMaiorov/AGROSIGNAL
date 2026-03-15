@@ -1,0 +1,92 @@
+services:
+
+  postgres:
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_DB: agromap
+      POSTGRES_USER: agromap
+      POSTGRES_PASSWORD: agromap_dev_password
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U agromap -d agromap"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    network_mode: host
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping | grep PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    network_mode: host
+
+  backend-api:
+    image: autodetect_v20-backend:latest
+    build:
+      context: ./backend
+    volumes:
+      - ./backend:/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      PYTHONPATH: /app
+    network_mode: host
+
+  celery-worker:
+    image: autodetect_v20-backend:latest
+    build:
+      context: ./backend
+    volumes:
+      - ./backend:/app
+    command: >
+      celery -A core.celery_app:celery worker
+      -l INFO -Q gpu,default --concurrency=1
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      PYTHONPATH: /app
+    network_mode: host
+
+  celery-beat:
+    image: autodetect_v20-backend:latest
+    build:
+      context: ./backend
+    volumes:
+      - ./backend:/app
+    command: celery -A core.celery_app:celery beat -l INFO
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      PYTHONPATH: /app
+    network_mode: host
+
+  frontend:
+    image: autodetect_v20-frontend:latest
+    build:
+      context: ./frontend
+    depends_on:
+      - backend-api
+    network_mode: host
+
+volumes:
+  pg_data:
+  redis_data:

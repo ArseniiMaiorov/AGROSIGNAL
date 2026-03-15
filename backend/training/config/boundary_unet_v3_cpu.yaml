@@ -1,0 +1,34 @@
+model_name: boundary_unet_v3_cpu
+model_version: boundary_unet_v3_cpu
+train_data_version: open_public_ru_v3_cpu
+feature_stack_version: v3_candidate_16ch_cpu
+feature_profile: v2_16ch
+output_model: backend/models/boundary_unet_v3_cpu.pth
+output_norm: backend/models/boundary_unet_v3_cpu.norm.json
+output_onnx: backend/models/boundary_unet_v3_cpu.onnx
+output_stats: backend/debug/runs/boundary_unet_v3_cpu_stats.json
+epochs: 24
+patience: 8
+batch_size: 2
+eval_batch_size: 2
+accumulation_steps: 8
+patch_size: 256
+stride: 64
+tile_cache_size: 2
+num_workers: 0
+progress_interval: 50
+eval_progress_interval: 50
+lr: 0.0001
+weight_decay: 0.0001
+cpu: true
+dropout_bottleneck: 0.30
+dropout_dec4: 0.20
+dropout_dec3: 0.10
+geometry_refine_profile: balanced
+extent_threshold: 0.42
+tta_mode_eval: rotate4
+s1_enabled: false
+low_mem: true
+notes:
+  - CPU-safe local candidate for Russian retrain.
+  - Uses existing bounded-memory trainer and keeps promotion gated by holdout/QA.

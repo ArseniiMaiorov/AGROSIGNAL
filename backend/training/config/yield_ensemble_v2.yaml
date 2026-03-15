@@ -1,0 +1,9 @@
+model_name: yield_ensemble_v2
+model_version: agronomy_ensemble_v2
+dataset_version: yield_corpus_v2
+experimental_lstm: false
+conformal_alpha: 0.1
+use_aquacrop_lite: true
+notes:
+  - Meta-layer wraps baseline regressor with crop suitability and conformal intervals.
+  - LSTM path remains optional and disabled by default on CPU-only hosts.

@@ -1,0 +1,24 @@
+[
+  {
+    "id": "holdout_01",
+    "request": {
+      "aoi": {
+        "type": "point_radius",
+        "lat": 58.689077,
+        "lon": 29.892103,
+        "radius_km": 2
+      },
+      "time_range": {
+        "start_date": "2025-04-15",
+        "end_date": "2025-10-15"
+      },
+      "resolution_m": 10,
+      "max_cloud_pct": 40,
+      "target_dates": 7,
+      "min_field_area_ha": 0.5,
+      "seed_mode": "auto",
+      "debug": false
+    },
+    "ground_truth_geojson": "/absolute/path/to/holdout_01_gt.geojson"
+  }
+]

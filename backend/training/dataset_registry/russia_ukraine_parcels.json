@@ -1,0 +1,10 @@
+{
+  "source": "Russia/Ukraine parcels dataset",
+  "license": "See source dataset terms",
+  "country": ["Russia", "Ukraine"],
+  "year": "2021",
+  "label_type": "field_boundaries",
+  "artifact_uri": "https://zenodo.org/records/5571868",
+  "checksum": null,
+  "prepare_recipe": "Download source archive, normalize polygons to EPSG:4326, generate immutable manifest with split tags and checksums."
+}

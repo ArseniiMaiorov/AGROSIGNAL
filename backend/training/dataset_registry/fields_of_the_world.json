@@ -1,0 +1,10 @@
+{
+  "source": "Fields of The World",
+  "license": "See source cooperative / repository terms",
+  "country": ["Global"],
+  "year": "rolling",
+  "label_type": "field_boundaries",
+  "artifact_uri": "https://github.com/fieldsoftheworld/",
+  "checksum": null,
+  "prepare_recipe": "Export country subsets, preserve source lineage, convert to AOI/chip manifests with country and crop tags."
+}

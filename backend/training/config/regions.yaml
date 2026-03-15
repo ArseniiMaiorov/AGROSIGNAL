@@ -1,0 +1,22 @@
+north:
+  regions:
+    - Perm Krai
+    - Komi
+    - Kirov
+    - Arkhangelsk South
+    - North Udmurtia
+central:
+  regions:
+    - Moscow
+    - Tatarstan
+    - Bashkortostan
+    - Voronezh
+    - Belgorod
+south:
+  regions:
+    - Krasnodar
+    - Stavropol
+    - Rostov
+    - Orenburg
+    - Altai Krai
+    - Primorsky Krai

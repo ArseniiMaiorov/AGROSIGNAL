@@ -1,0 +1,10 @@
+{
+  "source": "EuroCropsV2",
+  "license": "See JRC dataset terms",
+  "country": ["EU"],
+  "year": "2024",
+  "label_type": "parcel_boundaries_and_crop_labels",
+  "artifact_uri": "https://data.jrc.ec.europa.eu/dataset/b9fb9e67-78a9-4327-9d59-39a928d812d3",
+  "checksum": null,
+  "prepare_recipe": "Filter parcel boundaries, align crop codes, derive boundary chips, and export immutable manifests for train/calibration/holdout."
+}

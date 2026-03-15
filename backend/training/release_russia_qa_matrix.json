@@ -1,0 +1,59 @@
+{
+  "seed": 20260307,
+  "default_radius_km": 3,
+  "default_resolution_m": 30,
+  "default_time_range": {
+    "start_date": "2025-05-01",
+    "end_date": "2025-08-31"
+  },
+  "modes": ["standard", "quality"],
+  "items": [
+    {"id": "kaliningrad_01", "region": "Kaliningrad", "lat": 54.6402, "lon": 21.8083},
+    {"id": "kaliningrad_02", "region": "Kaliningrad", "lat": 54.5346, "lon": 20.5561},
+    {"id": "kaliningrad_03", "region": "Kaliningrad", "lat": 54.7718, "lon": 21.1642},
+
+    {"id": "belgorod_01", "region": "Belgorod", "lat": 50.7424, "lon": 36.6401},
+    {"id": "belgorod_02", "region": "Belgorod", "lat": 50.5982, "lon": 37.3628},
+    {"id": "belgorod_03", "region": "Belgorod", "lat": 50.4633, "lon": 36.1017},
+
+    {"id": "voronezh_01", "region": "Voronezh", "lat": 51.1896, "lon": 39.1464},
+    {"id": "voronezh_02", "region": "Voronezh", "lat": 50.8674, "lon": 40.6039},
+    {"id": "voronezh_03", "region": "Voronezh", "lat": 51.5882, "lon": 39.4584},
+
+    {"id": "krasnodar_01", "region": "Krasnodar", "lat": 45.2307, "lon": 38.7199},
+    {"id": "krasnodar_02", "region": "Krasnodar", "lat": 45.4871, "lon": 39.2117},
+    {"id": "krasnodar_03", "region": "Krasnodar", "lat": 45.0264, "lon": 38.3026},
+
+    {"id": "stavropol_01", "region": "Stavropol", "lat": 45.0423, "lon": 42.0048},
+    {"id": "stavropol_02", "region": "Stavropol", "lat": 45.3354, "lon": 42.6831},
+    {"id": "stavropol_03", "region": "Stavropol", "lat": 44.9848, "lon": 43.2184},
+
+    {"id": "tatarstan_01", "region": "Tatarstan", "lat": 55.6894, "lon": 49.2018},
+    {"id": "tatarstan_02", "region": "Tatarstan", "lat": 55.3912, "lon": 50.1043},
+    {"id": "tatarstan_03", "region": "Tatarstan", "lat": 54.9725, "lon": 52.3279},
+
+    {"id": "bashkortostan_01", "region": "Bashkortostan", "lat": 54.5463, "lon": 55.6489},
+    {"id": "bashkortostan_02", "region": "Bashkortostan", "lat": 54.2144, "lon": 56.8041},
+    {"id": "bashkortostan_03", "region": "Bashkortostan", "lat": 53.9826, "lon": 55.1184},
+
+    {"id": "orenburg_01", "region": "Orenburg", "lat": 51.4048, "lon": 54.9872},
+    {"id": "orenburg_02", "region": "Orenburg", "lat": 51.0573, "lon": 55.8865},
+    {"id": "orenburg_03", "region": "Orenburg", "lat": 52.1171, "lon": 54.5234},
+
+    {"id": "altai_01", "region": "Altai Krai", "lat": 53.1947, "lon": 83.8021},
+    {"id": "altai_02", "region": "Altai Krai", "lat": 52.8761, "lon": 82.5975},
+    {"id": "altai_03", "region": "Altai Krai", "lat": 53.5078, "lon": 81.8359},
+
+    {"id": "novosibirsk_01", "region": "Novosibirsk", "lat": 55.1453, "lon": 80.9348},
+    {"id": "novosibirsk_02", "region": "Novosibirsk", "lat": 54.9231, "lon": 82.3617},
+    {"id": "novosibirsk_03", "region": "Novosibirsk", "lat": 54.6817, "lon": 81.2481},
+
+    {"id": "amur_01", "region": "Amur", "lat": 50.3349, "lon": 127.6048},
+    {"id": "amur_02", "region": "Amur", "lat": 50.1238, "lon": 128.2714},
+    {"id": "amur_03", "region": "Amur", "lat": 49.9074, "lon": 127.1433},
+
+    {"id": "primorsky_01", "region": "Primorsky Krai", "lat": 44.8612, "lon": 132.2147},
+    {"id": "primorsky_02", "region": "Primorsky Krai", "lat": 44.7416, "lon": 132.8853},
+    {"id": "primorsky_03", "region": "Primorsky Krai", "lat": 44.5481, "lon": 131.9015}
+  ]
+}

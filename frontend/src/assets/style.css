@@ -1,0 +1,204 @@
+* {
+  box-sizing: border-box;
+}
+
+:root {
+  --font-ui: 'Tahoma', 'Verdana', sans-serif;
+  --font-mono: 'Lucida Console', 'Courier New', monospace;
+  --win-bg: #d4d0c8;
+  --win-panel: #ece9d8;
+  --win-shadow-dark: #5f5f5f;
+  --win-shadow-mid: #7e7e7e;
+  --win-shadow-light: #ffffff;
+  --win-shadow-soft: #c7c7c7;
+  --text-main: #203248;
+  --text-muted: #5d6470;
+  --win-title-bg: linear-gradient(90deg, #0e4470 0%, #2a79a5 65%, #6bb0d3 100%);
+  --win-title-color: #f8fbff;
+  --btn-primary-bg: linear-gradient(180deg, #5db98c 0%, #2d8b64 100%);
+  --btn-primary-color: #f7fff9;
+  --input-bg: #ffffff;
+  --input-color: #1a2735;
+  --desktop-bg: linear-gradient(180deg, rgba(255,255,255,0.15), transparent 24%), linear-gradient(135deg, #0b6f77 0%, #138b91 38%, #3a9f7a 100%);
+  --scrollbar-track: #d8d3cb;
+  --scrollbar-thumb: #a7a7a7;
+  --error-bg: #f3cbc6;
+  --error-color: #6e241e;
+  --error-border: #8d4c47;
+  --status-online-bg: #c9f0d8;
+  --status-online-color: #124125;
+  --status-degraded-bg: #f3e8b8;
+  --status-degraded-color: #594500;
+  --status-offline-bg: #f3cbc6;
+  --status-offline-color: #68211c;
+  --taskbar-btn-bg: linear-gradient(180deg, #e9e9e9, #c7c7c7);
+  --weather-cell-bg: #efefef;
+  --tooltip-bg: #fff6d6;
+}
+
+html,
+body,
+#app {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  font-family: var(--font-ui);
+  font-size: 13px;
+  color: var(--text-main);
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+input[type='text'],
+input[type='number'],
+input[type='date'],
+select,
+textarea {
+  width: 100%;
+  min-height: 32px;
+  padding: 6px 8px;
+  border: 2px solid;
+  border-color: var(--win-shadow-mid) var(--win-shadow-light) var(--win-shadow-light) var(--win-shadow-mid);
+  background: var(--input-bg);
+  color: var(--input-color);
+}
+
+input[type='checkbox'] {
+  width: 16px;
+  height: 16px;
+}
+
+button {
+  user-select: none;
+}
+
+.btn-primary {
+  min-height: 40px;
+  border: 2px solid;
+  border-color: var(--win-shadow-light) var(--win-shadow-dark) var(--win-shadow-dark) var(--win-shadow-light);
+  background: var(--btn-primary-bg);
+  color: var(--btn-primary-color);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.btn-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.window-shell {
+  background: var(--win-bg);
+  border: 2px solid;
+  border-color: var(--win-shadow-light) var(--win-shadow-dark) var(--win-shadow-dark) var(--win-shadow-light);
+  box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.18);
+}
+
+.window-title {
+  min-height: 28px;
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  background: var(--win-title-bg);
+  color: var(--win-title-color);
+  font-weight: 700;
+  cursor: grab;
+  user-select: none;
+}
+
+.window-title:active {
+  cursor: grabbing;
+}
+
+.window-body {
+  padding: 12px;
+}
+
+.placeholder {
+  color: var(--text-muted);
+}
+
+.ol-zoom {
+  top: 42px !important;
+  left: auto !important;
+  right: 10px !important;
+}
+
+.ol-zoom button {
+  width: 28px !important;
+  height: 28px !important;
+  border-radius: 0 !important;
+  border: 2px solid !important;
+  border-color: var(--win-shadow-light) var(--win-shadow-dark) var(--win-shadow-dark) var(--win-shadow-light) !important;
+  background: var(--win-bg) !important;
+  color: var(--text-main) !important;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--scrollbar-track);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border: 2px solid var(--scrollbar-track);
+}
+
+/* ── Beginner-mode tooltips ─────────────────────────────────────────────── */
+/* When .beginner-mode is active on <body>, elements with data-btip show     */
+/* a styled tooltip on hover via pure CSS pseudo-elements.                   */
+body.beginner-mode [data-btip] {
+  position: relative;
+}
+body.beginner-mode [data-btip]:hover::before {
+  content: attr(data-btip);
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  min-width: 200px;
+  max-width: 320px;
+  padding: 7px 10px;
+  background: #1a2540;
+  color: #e8eaf2;
+  font-size: 11.5px;
+  line-height: 1.5;
+  border: 1px solid #4a5a80;
+  box-shadow: 2px 2px 0 rgba(0,0,0,0.35);
+  white-space: pre-line;
+  pointer-events: none;
+  z-index: 9999;
+}
+body.beginner-mode [data-btip]:hover::after {
+  content: '';
+  position: absolute;
+  bottom: calc(100% + 1px);
+  left: 50%;
+  transform: translateX(-50%);
+  border: 5px solid transparent;
+  border-top-color: #4a5a80;
+  pointer-events: none;
+  z-index: 9999;
+}
+/* If tooltip would overflow left/right edge, anchor left */
+body.beginner-mode [data-btip-left]:hover::before {
+  left: 0;
+  transform: none;
+}
+body.beginner-mode [data-btip-left]:hover::after {
+  left: 16px;
+  transform: none;
+}

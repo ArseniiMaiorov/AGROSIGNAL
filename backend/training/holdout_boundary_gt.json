@@ -1,0 +1,46 @@
+{
+  "items": [
+    {
+      "id": "nw_01",
+      "aoi": {
+        "type": "point_radius",
+        "lat": 58.689077,
+        "lon": 29.892103,
+        "radius_km": 2
+      },
+      "ground_truth_geojson": "/absolute/path/to/manual_gt/nw_01.geojson",
+      "region": "northwest",
+      "region_band": "north",
+      "region_boundary_profile_target": "north_boundary",
+      "gt_quality_tier": "manual_precise",
+      "split": "calibration",
+      "hydro_complexity": "high",
+      "road_complexity": "medium",
+      "water_adjacent_fields_present": true,
+      "error_mode_tag": "north_shrink",
+      "parcel_shape_class": "irregular_large",
+      "adjacency_tag": "water"
+    },
+    {
+      "id": "center_01",
+      "aoi": {
+        "type": "point_radius",
+        "lat": 55.7522,
+        "lon": 37.6156,
+        "radius_km": 2
+      },
+      "ground_truth_geojson": "/absolute/path/to/manual_gt/center_01.geojson",
+      "region": "center",
+      "region_band": "central",
+      "region_boundary_profile_target": "balanced",
+      "gt_quality_tier": "manual_precise",
+      "split": "holdout",
+      "hydro_complexity": "low",
+      "road_complexity": "low",
+      "water_adjacent_fields_present": false,
+      "error_mode_tag": "south_missed_fields",
+      "parcel_shape_class": "rectangular_large",
+      "adjacency_tag": "none"
+    }
+  ]
+}
