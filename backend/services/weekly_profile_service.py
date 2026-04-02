@@ -569,13 +569,14 @@ async def materialize_weekly_profile(
     imported_weather_days = len(imported_weather_daily)
     openmeteo_archive_daily: dict[date, dict[str, float]] = {}
     era5_daily: dict[date, dict[str, float]] = {}
-    if imported_weather_days < 21:
+    external_weather_to = min(season_end, date.today())
+    if imported_weather_days < 21 and external_weather_to >= season_start:
         try:
             openmeteo_archive_daily = await _fetch_openmeteo_archive_daily(
                 lat=float(centroid.y),
                 lon=float(centroid.x),
                 date_from=season_start,
-                date_to=season_end,
+                date_to=external_weather_to,
             )
             if openmeteo_archive_daily:
                 logger.info(
@@ -600,7 +601,7 @@ async def materialize_weekly_profile(
                         "total_cloud_cover",
                     ],
                     date_from=season_start,
-                    date_to=season_end,
+                    date_to=external_weather_to,
                 )
                 era5_daily = _parse_era5_timeseries(era5_payload)
                 # Derive solar_radiation_mj from ERA5 cloud cover using Ångström-Prescott

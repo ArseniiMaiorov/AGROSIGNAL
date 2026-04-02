@@ -887,6 +887,8 @@ DEFAULT_PERMISSION_SPECS: tuple[tuple[str, str], ...] = (
     ("mlops:read", "Read ML datasets, benchmarks and deployments"),
     ("mlops:write", "Promote, rollback and register ML metadata"),
     ("status:read", "Read system health"),
+    ("storage:read", "Read storage settings"),
+    ("storage:write", "Configure local or cloud storage"),
 )
 
 DEFAULT_ROLE_PERMISSIONS: dict[str, tuple[str, ...]] = {
@@ -906,6 +908,8 @@ DEFAULT_ROLE_PERMISSIONS: dict[str, tuple[str, ...]] = {
         "imports:read",
         "imports:write",
         "status:read",
+        "storage:read",
+        "storage:write",
     ),
     "label_reviewer": (
         "fields:read",
@@ -914,6 +918,7 @@ DEFAULT_ROLE_PERMISSIONS: dict[str, tuple[str, ...]] = {
         "labeling:review",
         "mlops:read",
         "status:read",
+        "storage:read",
     ),
     "viewer": (
         "fields:read",
@@ -927,6 +932,7 @@ DEFAULT_ROLE_PERMISSIONS: dict[str, tuple[str, ...]] = {
         "imports:read",
         "mlops:read",
         "status:read",
+        "storage:read",
     ),
 }
 
@@ -972,7 +978,15 @@ def get_engine():
     global _engine
     if _engine is None:
         settings = get_settings()
-        _engine = create_async_engine(settings.DATABASE_URL, echo=False, pool_size=5, max_overflow=10)
+        _engine = create_async_engine(
+            settings.DATABASE_URL,
+            echo=False,
+            pool_size=max(1, int(settings.DB_POOL_SIZE)),
+            max_overflow=max(0, int(settings.DB_MAX_OVERFLOW)),
+            pool_timeout=max(1.0, float(settings.DB_POOL_TIMEOUT_S)),
+            pool_recycle=max(60, int(settings.DB_POOL_RECYCLE_S)),
+            pool_pre_ping=bool(settings.DB_POOL_PRE_PING),
+        )
     return _engine
 
 

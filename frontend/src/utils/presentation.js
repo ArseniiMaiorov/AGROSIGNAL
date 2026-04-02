@@ -9,7 +9,7 @@ const PRESET_META = {
   ru: {
     fast: {
       label: 'Быстрый',
-      description: '10 м, 4 даты. Preview-only режим до 40 км: укрупнённые сельхоз-контуры без тяжёлого ranker, watershed и объектной фильтрации.',
+      description: '10 м, 4 даты. Режим только для просмотра до 40 км: укрупнённые сельхоз-контуры без тяжёлого ranker, watershed и объектной фильтрации.',
     },
     standard: {
       label: 'Стандартный',
@@ -111,13 +111,13 @@ const REASON_TEXT = {
     low_confidence_manual_review: 'Контур неустойчив, его стоит проверить вручную.',
     crop_unsuitable_for_region: 'Культура плохо подходит для этого региона, автоматический расчёт нельзя считать надёжным.',
     crop_borderline_suitability: 'Культура находится на границе агроклиматической пригодности для этого региона.',
-    global_baseline_requires_review: 'Использован общий baseline без локальной калибровки, нужен агрономический review.',
+    global_baseline_requires_review: 'Использована общая базовая оценка без локальной калибровки, нужна агрономическая проверка.',
     outside_model_applicability: 'Входные данные выходят за область применимости модели.',
     outside_training_envelope: 'Сценарий выходит за диапазон наблюдений, на которых модель обучалась.',
     baseline_not_supported: 'Базовый прогноз по этому полю не поддержан моделью.',
     weekly_profile_insufficient: 'Для расчёта не хватает качественного недельного профиля поля.',
     support_review_required: 'Результат требует дополнительной проверки перед использованием.',
-    preview_contour_requires_confirmation: 'Preview-контур предназначен только для предварительного просмотра и требует подтверждения.',
+    preview_contour_requires_confirmation: 'Предварительный контур предназначен только для предварительного просмотра и требует подтверждения.',
   },
   en: {
     host_safety_envelope_exceeded: 'Run parameters exceed the safe envelope of the current host.',
@@ -300,7 +300,7 @@ const QUALITY_BAND_KEYS = {
 const SOURCE_LABELS = {
   ru: {
     autodetect: 'Автодетект',
-    autodetect_preview: 'Preview-контур',
+    autodetect_preview: 'Предварительный контур',
     manual: 'Ручная разметка',
     import: 'Импорт',
     merged: 'Объединение',
@@ -317,7 +317,7 @@ const SOURCE_LABELS = {
 const CONFIDENCE_TIER_LABELS = {
   ru: {
     tenant_calibrated: 'Локально калиброванный',
-    global_baseline: 'Глобальный baseline',
+    global_baseline: 'Глобальная базовая оценка',
     unsupported: 'Вне применимости',
   },
   en: {

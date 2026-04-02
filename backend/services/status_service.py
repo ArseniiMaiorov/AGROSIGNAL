@@ -260,9 +260,9 @@ class StatusService:
 
     def _check_satellite_browse(self) -> dict[str, Any]:
         primary = bool(self.settings.SH_CLIENT_ID and self.settings.SH_CLIENT_SECRET)
-        reserve = bool(self.settings.SH_CLIENT_ID_reserv and self.settings.SH_CLIENT_SECRET_reserv)
+        reserve = bool(self.settings.SH_CLIENT_ID_RESERVE and self.settings.SH_CLIENT_SECRET_RESERVE)
         second_reserve = bool(
-            self.settings.SH_CLIENT_ID_second_reserv and self.settings.SH_CLIENT_SECRET_second_reserv
+            self.settings.SH_CLIENT_ID_SECOND_RESERVE and self.settings.SH_CLIENT_SECRET_SECOND_RESERVE
         )
         if primary:
             return {

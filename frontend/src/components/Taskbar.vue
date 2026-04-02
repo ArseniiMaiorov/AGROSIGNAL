@@ -28,6 +28,81 @@
             </div>
           </div>
           <div class="setting-row column-row">
+            <span :data-btip="storageModeTooltip">{{ t('storage.title') }}</span>
+            <div class="setting-buttons">
+              <button :class="{ active: store.storageMode === 'local' }" @click="store.selectStorageMode('local')">
+                {{ t('storage.modeLocal') }}
+              </button>
+              <button :class="{ active: store.storageMode === 'cloud' }" @click="store.selectStorageMode('cloud')">
+                {{ t('storage.modeCloud') }}
+              </button>
+            </div>
+            <small class="setting-hint">{{ storageModeSummary }}</small>
+          </div>
+          <div v-if="store.storageMode === 'local'" class="setting-row column-row">
+            <button class="storage-action-btn" :disabled="store.isSavingStorageConfig" @click="applyLocalStorageMode">
+              {{ store.isSavingStorageConfig ? t('storage.saving') : t('storage.applyLocal') }}
+            </button>
+            <small class="setting-hint">{{ t('storage.localHint') }}</small>
+          </div>
+          <div v-else class="setting-row column-row storage-panel">
+            <span>{{ t('storage.folderUrl') }}</span>
+            <input
+              v-model.trim="store.cloudStorageUrl"
+              class="setting-input"
+              type="url"
+              :placeholder="t('storage.folderPlaceholder')"
+            />
+            <small class="setting-hint">{{ storageProviderSummary }}</small>
+            <div class="setting-buttons">
+              <button class="storage-action-btn" :disabled="cloudSaveDisabled" @click="saveCloudStorage">
+                {{ store.isSavingStorageConfig ? t('storage.connecting') : t('storage.saveAndConnect') }}
+              </button>
+              <button
+                class="storage-action-btn secondary"
+                :disabled="store.isCheckingStorageConnection || !store.cloudStorageUrl"
+                @click="refreshCloudStorage"
+              >
+                {{ store.isCheckingStorageConnection ? t('storage.checking') : t('storage.checkConnection') }}
+              </button>
+            </div>
+            <div v-if="storageStatusText" class="storage-status" :class="storageStatusClass">
+              {{ storageStatusText }}
+            </div>
+            <div v-if="store.storageAuthPrompt?.title" class="storage-auth-title">
+              {{ store.storageAuthPrompt.title }}
+            </div>
+            <div v-if="store.storageAuthPrompt?.description" class="storage-description">
+              {{ store.storageAuthPrompt.description }}
+            </div>
+            <a
+              v-if="store.storageAuthPrompt?.login_url"
+              class="storage-link"
+              :href="store.storageAuthPrompt.login_url"
+              target="_blank"
+              rel="noreferrer"
+            >
+              {{ t('storage.openLogin') }}
+            </a>
+            <code v-if="store.storageAuthPrompt?.suggested_command" class="storage-command">
+              {{ store.storageAuthPrompt.suggested_command }}
+            </code>
+            <div v-if="store.storageAuthPrompt?.steps?.length" class="storage-steps">
+              <div v-for="(step, index) in store.storageAuthPrompt.steps" :key="`${index}-${step}`" class="storage-step">
+                {{ index + 1 }}. {{ step }}
+              </div>
+            </div>
+            <div v-if="store.storageWorkspaceFolders.length" class="storage-folders">
+              <div class="storage-folders-title">{{ workspaceFoldersTitle }}</div>
+              <div v-if="store.storageWorkspaceRoot" class="storage-root">
+                {{ t('storage.workspaceRoot') }}: {{ store.storageWorkspaceRoot }}
+              </div>
+              <div v-for="folder in store.storageWorkspaceFolders" :key="folder" class="storage-folder-item">
+                {{ folder }}
+              </div>
+            </div>
+          </div>
+          <div class="setting-row column-row">
             <span :data-btip="detectionPresetTooltip">{{ locale === 'ru' ? 'Детект-профиль' : 'Detection preset' }}</span>
             <select class="setting-select" :value="store.detectionPreset" @change="updatePreset">
               <option value="fast">{{ presetOptionLabel('fast') }}</option>
@@ -113,9 +188,15 @@
         >
           {{ item.shortLabel }}
         </button>
+        <button
+          class="taskbar-window-btn"
+          :title="locale === 'ru' ? 'Свернуть все окна' : 'Minimize all'"
+          :data-btip="locale === 'ru' ? 'Закрывает все открытые панели, освобождая карту.' : 'Close all open panels to free the map.'"
+          @click="store.hideAllWindows()"
+        >⊞</button>
       </div>
 
-      <div class="taskbar-brand" title="AgroVision Production">{{ t('app.brand') }}</div>
+      <div class="taskbar-brand" title="ТерраINFO">{{ t('app.brand') }}</div>
 
       <div class="taskbar-status" :title="statusLabel">
         <span class="status-lamp" :class="statusClass"></span>
@@ -156,7 +237,7 @@ const windowButtons = computed(() => {
       btip: ru ? 'Панель поля: прогноз урожайности, метрики NDVI/NDMI, история, сценарии, архив.' : 'Field panel: yield, metrics, history, scenarios.' },
     { id: 'legend', shortLabel: ru ? 'Слои' : 'Layers', title: t('taskbar.menuLegend'),
       btip: ru ? 'Слои карты: NDVI, NDMI, NDWI, BSI, ветер, осадки, спутниковый снимок.' : 'Map layer controls.' },
-    { id: 'logs', shortLabel: ru ? 'Логи' : 'Logs', title: t('taskbar.menuLogs'),
+    { id: 'logs', shortLabel: ru ? 'Журнал' : 'Logs', title: t('taskbar.menuLogs'),
       btip: ru ? 'Журнал событий: preflight, запуск, прогресс, ошибки, обновления данных.' : 'Event log.' },
     { id: 'help', shortLabel: ru ? 'Справка' : 'Help', title: t('taskbar.menuHelp'),
       btip: ru ? 'Справка и инструкция по работе с приложением.' : 'Help and user guide.' },
@@ -172,16 +253,78 @@ const statusLabel = computed(() => {
 })
 
 const statusClass = computed(() => store.systemStatus?.status || 'degraded')
+const storageModeTooltip = computed(() => (
+  locale.value === 'ru'
+    ? 'Определяет, где хранить рабочие данные: только локально, в облачной папке или на удалённом диске по WebDAV.'
+    : 'Choose whether project data stays local, in a cloud folder, or on a remote disk via WebDAV.'
+))
+const inferredStorageProviderLabel = computed(() => {
+  const rawUrl = String(store.cloudStorageUrl || '').trim().toLowerCase()
+  if (!rawUrl) {
+    return ''
+  }
+  if (rawUrl.includes('drive.google.com') || rawUrl.includes('docs.google.com')) {
+    return 'Google Drive'
+  }
+  if (rawUrl.includes('dropbox.com')) {
+    return 'Dropbox'
+  }
+  if (rawUrl.includes('disk.yandex.') || rawUrl.includes('yadi.sk')) {
+    return 'Яндекс Диск'
+  }
+  if (rawUrl.startsWith('http://') || rawUrl.startsWith('https://')) {
+    return locale.value === 'ru' ? 'Удалённый диск' : 'Remote Disk'
+  }
+  return ''
+})
+const activeStorageProviderLabel = computed(() => store.storageProviderLabel || inferredStorageProviderLabel.value)
 const detectionPresetTooltip = computed(() => (
   locale.value === 'ru'
     ? `Профиль детекции полей.
-Быстрый: preview-only, укрупнённые сельхоз-контуры до 40 км.
-Стандарт: основной рабочий режим точного детекта полей до 20 км.
-Качество: максимальная геометрия с TTA и тяжёлым уточнением до 8 км.`
+Быстрый: режим только для просмотра, укрупнённые сельхоз-контуры до 40 км.
+Стандартный: основной рабочий режим точного детекта полей до 20 км.
+Точный: максимальная геометрия с TTA и тяжёлым уточнением до 8 км.`
     : `Detection profile.
 Fast: preview-only, coarse agricultural contours up to 40 km.
 Standard: the main operational field-detection mode up to 20 km.
 Quality: highest-fidelity geometry with TTA and heavy refinement up to 8 km.`
+))
+const storageModeSummary = computed(() => {
+  if (store.storageMode === 'cloud') {
+    if (activeStorageProviderLabel.value) {
+      return `${t('storage.modeCloud')} · ${activeStorageProviderLabel.value}`
+    }
+    return t('storage.cloudHint')
+  }
+  return t('storage.localHint')
+})
+const storageProviderSummary = computed(() => {
+  if (!store.cloudStorageUrl) {
+    return t('storage.folderHint')
+  }
+  if (activeStorageProviderLabel.value) {
+    return `${t('storage.provider')}: ${activeStorageProviderLabel.value}`
+  }
+  return t('storage.detecting')
+})
+const cloudSaveDisabled = computed(() => (
+  store.isSavingStorageConfig || !String(store.cloudStorageUrl || '').trim()
+))
+const storageStatusText = computed(() => store.storageMessage || '')
+const storageStatusClass = computed(() => {
+  const status = String(store.storageStatus || '')
+  if (status.includes('error') || status === 'unsupported' || status === 'unavailable') {
+    return 'is-error'
+  }
+  if (status.includes('pending') || status.includes('warning')) {
+    return 'is-warn'
+  }
+  return 'is-ok'
+})
+const workspaceFoldersTitle = computed(() => (
+  store.storageHierarchyReady
+    ? t('storage.workspaceFolders')
+    : t('storage.workspaceFoldersPlanned')
 ))
 
 function toggleStartMenu() {
@@ -207,6 +350,19 @@ function updateRefreshInterval(event) {
 
 function updateBoolean(key, event) {
   store[key] = event.target.value === 'true'
+}
+
+async function applyLocalStorageMode() {
+  store.selectStorageMode('local')
+  await store.saveStorageSettings()
+}
+
+async function saveCloudStorage() {
+  await store.saveStorageSettings()
+}
+
+async function refreshCloudStorage() {
+  await store.connectCloudStorage()
 }
 
 function presetOptionLabel(preset) {
@@ -250,7 +406,7 @@ onBeforeUnmount(() => {
   position: relative;
   flex-shrink: 0;
   height: 44px;
-  z-index: 20;
+  z-index: 9000;
 }
 
 .taskbar {
@@ -364,14 +520,24 @@ onBeforeUnmount(() => {
   position: absolute;
   left: 8px;
   bottom: 48px;
-  width: 260px;
-  z-index: 25;
+  width: min(360px, calc(100vw - 16px));
+  max-height: calc(100vh - 64px);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  z-index: 9010;
 }
 
 .start-menu-body {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-gutter: stable;
+  overscroll-behavior: contain;
 }
 
 .start-menu-item {
@@ -392,6 +558,7 @@ onBeforeUnmount(() => {
   flex-direction: column;
   gap: 6px;
   padding: 4px 0;
+  min-width: 0;
 }
 
 .setting-row {
@@ -400,6 +567,7 @@ onBeforeUnmount(() => {
   justify-content: space-between;
   gap: 8px;
   padding: 0 4px;
+  min-width: 0;
 }
 
 .column-row {
@@ -415,6 +583,8 @@ onBeforeUnmount(() => {
 .setting-buttons {
   display: flex;
   gap: 4px;
+  flex-wrap: wrap;
+  min-width: 0;
 }
 
 .setting-buttons button {
@@ -442,6 +612,114 @@ onBeforeUnmount(() => {
   background: var(--win-bg);
   color: var(--text-main);
   font: inherit;
+}
+
+.setting-input {
+  width: 100%;
+  min-height: 32px;
+  padding: 6px 8px;
+  border: 2px solid;
+  border-color: var(--win-shadow-mid) var(--win-shadow-light) var(--win-shadow-light) var(--win-shadow-mid);
+  background: var(--win-bg);
+  color: var(--text-main);
+  font: inherit;
+  box-sizing: border-box;
+}
+
+.storage-panel {
+  gap: 6px;
+  min-width: 0;
+}
+
+.storage-action-btn {
+  flex: 1;
+  min-height: 30px;
+  border: 2px solid;
+  border-color: var(--win-shadow-light) var(--win-shadow-dark) var(--win-shadow-dark) var(--win-shadow-light);
+  background: var(--taskbar-btn-bg);
+  color: var(--text-main);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.storage-action-btn.secondary {
+  font-weight: 600;
+}
+
+.storage-action-btn:disabled {
+  cursor: wait;
+  opacity: 0.7;
+}
+
+.storage-status,
+.storage-auth-title,
+.storage-description,
+.storage-root,
+.storage-folder-item,
+.storage-step {
+  font-size: 12px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.storage-auth-title {
+  font-weight: 700;
+}
+
+.storage-status {
+  padding: 8px;
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  background: rgba(255, 255, 255, 0.6);
+}
+
+.storage-status.is-ok {
+  color: #21502e;
+}
+
+.storage-status.is-warn {
+  color: #7b5a0e;
+}
+
+.storage-status.is-error {
+  color: #8b1f1f;
+}
+
+.storage-link {
+  display: inline-block;
+  color: #275790;
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+.storage-link:hover {
+  text-decoration: underline;
+}
+
+.storage-command {
+  display: block;
+  padding: 8px;
+  background: rgba(0, 0, 0, 0.06);
+  color: var(--text-main);
+  font-size: 11px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.storage-steps,
+.storage-folders {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.storage-folders-title {
+  font-size: 12px;
+  font-weight: 700;
 }
 
 @media (max-width: 900px) {

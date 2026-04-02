@@ -42,6 +42,11 @@ class Settings(BaseSettings):
         default="postgresql+psycopg://agromap:agromap_dev_password@postgres:5432/agromap",
         validation_alias=AliasChoices("DATABASE_URL_SYNC", "DATABASEURLSYNC"),
     )
+    DB_POOL_SIZE: int = 20
+    DB_MAX_OVERFLOW: int = 20
+    DB_POOL_TIMEOUT_S: float = 15.0
+    DB_POOL_RECYCLE_S: int = 1800
+    DB_POOL_PRE_PING: bool = True
     REDIS_URL: str = Field(
         default="redis://redis:6379/0",
         validation_alias=AliasChoices("REDIS_URL", "REDISURL"),
@@ -57,10 +62,10 @@ class Settings(BaseSettings):
 
     SH_CLIENT_ID: str = ""
     SH_CLIENT_SECRET: str = ""
-    SH_CLIENT_ID_reserv: str = ""
-    SH_CLIENT_SECRET_reserv: str = ""
-    SH_CLIENT_ID_second_reserv: str = ""
-    SH_CLIENT_SECRET_second_reserv: str = ""
+    SH_CLIENT_ID_RESERVE: str = ""
+    SH_CLIENT_SECRET_RESERVE: str = ""
+    SH_CLIENT_ID_SECOND_RESERVE: str = ""
+    SH_CLIENT_SECRET_SECOND_RESERVE: str = ""
     SH_BASE_URL: str = "https://services.sentinel-hub.com"
     SH_MAX_RETRIES: int = 4
     SH_RETRY_BASE_DELAY_S: float = 2.0
@@ -71,6 +76,8 @@ class Settings(BaseSettings):
 
     ERA5_CDS_URL: str = "https://cds.climate.copernicus.eu/api"
     ERA5_CDS_KEY: str = ""
+    ERA5_CDS_TIMEOUT_S: float = 45.0
+    ERA5_HTTP_FALLBACK_ENABLED: bool = False
     ERA5_CACHE_DIR: str = "/tmp/era5_cache"
     ERA5_CACHE_TTL_HOURS: int = 24
     OPENWEATHER_API_KEY: str = ""
@@ -78,14 +85,14 @@ class Settings(BaseSettings):
     OPENMETEO_BASE_URL: str = "https://api.open-meteo.com/v1"
     OPENMETEO_ARCHIVE_BASE_URL: str = "https://archive-api.open-meteo.com/v1/archive"
     WEATHER_PROVIDER: str = "openmeteo"
-    WEATHER_CACHE_TTL_MINUTES: int = 60
+    WEATHER_CACHE_TTL_MINUTES: int = 90
     STATUS_CACHE_TTL_SECONDS: int = 30
     ARCHIVE_DIR: str = "debug/archives"
     ARCHIVE_TTL_DAYS: int = 30
     DEFAULT_CROP_CODE: str = "wheat"
     YIELD_MODEL_VERSION: str = "agronomy_tabular_v2"
     SCENE_CACHE_DIR: str = "cache/sentinel_scenes"
-    SCENE_CACHE_TTL_DAYS: int = 30
+    SCENE_CACHE_TTL_DAYS: int = 45
     SH_RETRY_BUDGET: int = 12
     WEATHER_ALLOW_STALE_ON_FAILURE: bool = True
     AUTH_REQUIRED: bool = True
@@ -122,7 +129,7 @@ class Settings(BaseSettings):
     )
     TILE_SIZE_PX: int = 1024
     TILE_OVERLAP_M: int = 500
-    SENTINEL_CONCURRENT_REQUESTS: int = 4
+    SENTINEL_CONCURRENT_REQUESTS: int = 6
     TILE_MEMORY_CLEANUP_ENABLED: bool = True
     TILE_MEMORY_GC_EVERY_TILE: bool = True
     TILE_MAX_RUNTIME_S: int = 180
@@ -463,8 +470,8 @@ class Settings(BaseSettings):
     OBIA_MAX_INTERNAL_WATER_FRAC: float = 0.14  # relaxed from 0.10
     OBIA_RELAX_IF_ML_CONFIDENT: bool = True
     OBIA_RELAX_MIN_BOUNDARY_CONF: float = 0.60  # lower trigger threshold for relaxation
-    OBIA_RELAX_SHAPE_MULTIPLIER: float = 1.55  # relaxed from 1.35
-    OBIA_RELAX_HOLE_MULTIPLIER: float = 1.80   # relaxed from 1.50
+    OBIA_RELAX_SHAPE_MULTIPLIER: float = 1.65  # relaxed: elongated north fields
+    OBIA_RELAX_HOLE_MULTIPLIER: float = 1.90   # relaxed: fields with ponds/groves
     OBIA_RELAX_TREE_MULTIPLIER: float = 1.65   # relaxed from 1.50
 
     # Tile merge gate
@@ -543,7 +550,7 @@ class Settings(BaseSettings):
     ROAD_SOFT_BARRIER_MINOR_ONLY: bool = True
     ROAD_PARALLEL_EDGE_PENALTY_ENABLED: bool = True
     ROAD_DIRECTIONAL_PENALTY_ENABLED: bool = True
-    REGION_PROFILE_DEBUG_LOGGING: bool = True
+    REGION_PROFILE_DEBUG_LOGGING: bool = False  # production default
     REGION_PROFILE_RECORD_DIAGNOSTICS: bool = True
 
     # Regional boundary profiles

@@ -59,7 +59,7 @@ def _chaikin_smooth_coords(coords: list, iterations: int = 2) -> list:
     return coords
 
 
-def _chaikin_smooth_polygon(poly, iterations: int = 2):
+def _chaikin_smooth_polygon(poly, iterations: int = 3):
     """Apply Chaikin smoothing to a Polygon (exterior + holes)."""
     if not hasattr(poly, "exterior") or poly.is_empty:
         return poly
@@ -165,9 +165,9 @@ def polygonize_labels(
                 simplified = poly.simplify(simplify_tol_m, preserve_topology=True)
                 # Chaikin corner-cutting for smooth natural-looking boundaries
                 if simplified.geom_type == "Polygon":
-                    simplified = _chaikin_smooth_polygon(simplified, iterations=2)
+                    simplified = _chaikin_smooth_polygon(simplified, iterations=3)
                 elif simplified.geom_type == "MultiPolygon":
-                    parts = [_chaikin_smooth_polygon(p, iterations=2) for p in simplified.geoms]
+                    parts = [_chaikin_smooth_polygon(p, iterations=3) for p in simplified.geoms]
                     simplified = MultiPolygon([p for p in parts if p.is_valid and not p.is_empty])
             else:
                 simplified = poly

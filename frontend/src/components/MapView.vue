@@ -30,6 +30,9 @@
     <div v-else-if="store.showSatelliteBrowse && store.satelliteLoadStatus === 'error'" class="map-overlay-status map-overlay-error">
       {{ t('map.satelliteError') }}
     </div>
+    <div v-else-if="store.showSatelliteBrowse && store.satelliteLoadStatus === 'no_data'" class="map-overlay-status map-overlay-warn">
+      {{ t('map.satelliteNoData') }}
+    </div>
     <div v-else-if="store.gridLayerStatus === 'no_data'" class="map-overlay-status map-overlay-warn">
       {{ t('map.noLayerData') }}
     </div>
@@ -114,6 +117,14 @@ import { Draw } from 'ol/interaction'
 import Point from 'ol/geom/Point'
 import { fromLonLat, toLonLat, transformExtent } from 'ol/proj'
 import { Circle as CircleStyle, Fill, Stroke, Style } from 'ol/style'
+import {
+  SPECTRAL_LAYERS,
+  fieldHoverStyle,
+  drawStyle,
+  buildGridLayerStyle,
+  resolveFieldStyle,
+  resolveZoneStyle
+} from '../utils/mapStyles'
 import { valueToColor } from '../utils/gradients'
 import {
   formatReasonText,
@@ -143,95 +154,9 @@ let suppressFieldFit = false
 let resizeHandler = null
 let gridLayers = []
 let gridRequestController = null
+let satelliteLoadToken = 0
 
-const SPECTRAL_LAYERS = new Set(['ndvi', 'ndwi', 'ndmi', 'bsi'])
-const LAYER_PROPERTY_MAP = {
-  ndvi: 'ndvi_mean',
-  ndwi: 'ndwi_mean',
-  ndmi: 'ndmi_mean',
-  bsi: 'bsi_mean',
-  precipitation: 'precipitation_mm',
-  wind: 'wind_speed_m_s',
-  soil_moisture: 'soil_moist',
-  gdd: 'gdd_sum',
-  vpd: 'vpd_mean',
-}
 
-const manualFieldStyle = new Style({
-  fill: new Fill({ color: 'rgba(33, 87, 156, 0)' }),
-  stroke: new Stroke({ color: '#21579c', width: 2.8, lineDash: [8, 4] }),
-})
-
-const selectedManualFieldStyle = new Style({
-  fill: new Fill({ color: 'rgba(33, 87, 156, 0.05)' }),
-  stroke: new Stroke({ color: '#21579c', width: 3.6, lineDash: [8, 4] }),
-})
-
-const mergeSelectionStyle = new Style({
-  fill: new Fill({ color: 'rgba(201, 126, 39, 0.06)' }),
-  stroke: new Stroke({ color: '#c97e27', width: 3.2, lineDash: [10, 4] }),
-})
-
-const archiveMarkerImage = new CircleStyle({
-  radius: 5,
-  fill: new Fill({ color: '#c93a36' }),
-  stroke: new Stroke({ color: '#fff4f0', width: 1.5 }),
-})
-
-const scenarioMarkerImage = new CircleStyle({
-  radius: 5,
-  fill: new Fill({ color: '#2563eb' }),
-  stroke: new Stroke({ color: '#eff6ff', width: 1.5 }),
-})
-
-const bothMarkersImage = new CircleStyle({
-  radius: 5,
-  fill: new Fill({ color: '#d4a017' }),
-  stroke: new Stroke({ color: '#fffbeb', width: 1.5 }),
-})
-
-const fieldHoverStyle = new Style({
-  fill: new Fill({ color: 'rgba(36, 118, 187, 0)' }),
-  stroke: new Stroke({ color: '#204f88', width: 3.5 }),
-})
-
-const drawStyle = new Style({
-  fill: new Fill({ color: 'rgba(226, 167, 44, 0.18)' }),
-  stroke: new Stroke({ color: '#a86e13', width: 2, lineDash: [6, 4] }),
-})
-
-const FIELD_STROKE_COLORS = {
-  high: '#1e6a3a',
-  medium: '#8a6b18',
-  low: '#a04a24',
-  unknown: '#6c7b88',
-}
-
-const FIELD_CONFIDENCE_COLORS = [
-  '#8f2921',
-  '#b85d22',
-  '#c38b20',
-  '#5f8e2f',
-  '#1e8a4b',
-]
-
-const ZONE_STYLES = {
-  high: new Style({
-    fill: new Fill({ color: 'rgba(45, 143, 84, 0.24)' }),
-    stroke: new Stroke({ color: '#226642', width: 1.6 }),
-  }),
-  medium: new Style({
-    fill: new Fill({ color: 'rgba(207, 162, 41, 0.24)' }),
-    stroke: new Stroke({ color: '#9a6f14', width: 1.6 }),
-  }),
-  low: new Style({
-    fill: new Fill({ color: 'rgba(188, 98, 42, 0.24)' }),
-    stroke: new Stroke({ color: '#92481f', width: 1.6 }),
-  }),
-}
-
-const fieldStyleCache = new Map()
-const selectedFieldStyleCache = new Map()
 
 function clamp01(value) {
   return Math.max(0, Math.min(1, value))
@@ -347,113 +272,7 @@ function renderManagementZoneTooltipContent(container, props) {
   container.replaceChildren(content)
 }
 
-function fieldQualityBand(feature) {
-  const band = String(feature?.get('quality_band') || '')
-  if (band === 'high' || band === 'medium' || band === 'low') {
-    return band
-  }
-  return 'unknown'
-}
 
-function fieldBoundaryConfidence(feature) {
-  const geometryConfidence = Number(feature?.get('geometry_confidence'))
-  const ttaConsensus = Number(feature?.get('tta_consensus'))
-  const boundaryUncertainty = Number(feature?.get('boundary_uncertainty'))
-  const qualityConfidence = Number(feature?.get('quality_confidence'))
-  const qualityScore = Number(feature?.get('quality_score'))
-
-  let confidence = Number.isFinite(geometryConfidence)
-    ? geometryConfidence
-    : (Number.isFinite(qualityConfidence) ? qualityConfidence : qualityScore)
-  if (!Number.isFinite(confidence)) {
-    return null
-  }
-  confidence = clamp01(confidence)
-
-  if (Number.isFinite(boundaryUncertainty)) {
-    confidence = clamp01(confidence * (1 - 0.65 * clamp01(boundaryUncertainty)))
-  }
-  if (Number.isFinite(ttaConsensus)) {
-    confidence = clamp01(confidence * 0.85 + clamp01(ttaConsensus) * 0.15)
-  }
-  return confidence
-}
-
-function fieldStrokeColor(feature, band) {
-  if (String(feature?.get('source') || '').trim().toLowerCase() === 'autodetect_preview') {
-    return '#b46a1f'
-  }
-  const confidence = fieldBoundaryConfidence(feature)
-  if (confidence === null) {
-    return FIELD_STROKE_COLORS[band] || FIELD_STROKE_COLORS.unknown
-  }
-  const bucket = Math.max(0, Math.min(FIELD_CONFIDENCE_COLORS.length - 1, Math.floor(confidence * FIELD_CONFIDENCE_COLORS.length)))
-  return FIELD_CONFIDENCE_COLORS[bucket]
-}
-
-function getFieldStyleForFeature(feature, selected = false) {
-  const band = fieldQualityBand(feature)
-  const strokeColor = fieldStrokeColor(feature, band)
-  const preview = String(feature?.get('source') || '').trim().toLowerCase() === 'autodetect_preview'
-  const cacheKey = `${band}:${strokeColor}:${preview ? 'preview' : 'normal'}:${selected ? 'selected' : 'plain'}`
-  const cache = selected ? selectedFieldStyleCache : fieldStyleCache
-  const cached = cache.get(cacheKey)
-  if (cached) {
-    return cached
-  }
-  const style = selected
-    ? [
-        new Style({
-          fill: new Fill({ color: preview ? 'rgba(180, 106, 31, 0.08)' : 'rgba(33, 87, 156, 0.04)' }),
-          stroke: new Stroke({
-            color: preview ? 'rgba(180, 106, 31, 0.82)' : 'rgba(33, 87, 156, 0.78)',
-            width: 4.4,
-            lineDash: preview ? [10, 5] : undefined,
-          }),
-        }),
-        new Style({
-          fill: new Fill({ color: preview ? 'rgba(180, 106, 31, 0.03)' : 'rgba(40, 142, 72, 0)' }),
-          stroke: new Stroke({ color: strokeColor, width: 2.6, lineDash: preview ? [10, 5] : undefined }),
-        }),
-      ]
-    : new Style({
-        fill: new Fill({ color: preview ? 'rgba(180, 106, 31, 0.03)' : 'rgba(40, 142, 72, 0)' }),
-        stroke: new Stroke({ color: strokeColor, width: 2.5, lineDash: preview ? [10, 5] : undefined }),
-      })
-  cache.set(cacheKey, style)
-  return style
-}
-
-const _gridStyleCache = new Map()
-function buildGridLayerStyle(layerId, order = 0) {
-  const isSpectral = SPECTRAL_LAYERS.has(layerId)
-  const strokeColor = isSpectral ? 'rgba(255, 255, 255, 0.12)' : 'rgba(255, 255, 255, 0.18)'
-  return (feature) => {
-    const propertyName = LAYER_PROPERTY_MAP[layerId] || layerId
-    const rawFieldCoverage = feature.get('field_coverage')
-    const hasFieldCoverage = rawFieldCoverage !== null && rawFieldCoverage !== undefined
-    const fieldCoverage = hasFieldCoverage ? Number(rawFieldCoverage) : null
-    if (store.showFieldsOnly && hasFieldCoverage && fieldCoverage <= 0) {
-      return null
-    }
-    const value = feature.get(propertyName)
-    if (value === undefined || value === null) {
-      return null
-    }
-    const color = valueToColor(value, layerId)
-    const cacheKey = color + strokeColor
-    let style = _gridStyleCache.get(cacheKey)
-    if (!style) {
-      style = new Style({
-        fill: new Fill({ color }),
-        stroke: new Stroke({ color: strokeColor, width: 1 }),
-      })
-      if (_gridStyleCache.size > 2000) _gridStyleCache.clear()
-      _gridStyleCache.set(cacheKey, style)
-    }
-    return style
-  }
-}
 
 function syncGridLayers() {
   if (!map) {
@@ -508,13 +327,21 @@ const satelliteMetaLabel = computed(() => {
   if (!store.showSatelliteBrowse || !scene) {
     return ''
   }
-  const dateToken = scene.requested_date || scene.requested_window?.start || 'auto'
+  if (scene.status === 'no_data') {
+    return locale.value === 'ru'
+      ? 'Спутник: нет пригодной сцены'
+      : 'Satellite: no usable scene'
+  }
+  const dateToken = scene.resolved_date || scene.requested_date || scene.requested_window?.start || 'auto'
+  const modeLabel = scene.status === 'fallback_window'
+    ? (locale.value === 'ru' ? 'автоподбор по окну' : 'window fallback')
+    : ''
   const cloud = scene.cloud_cover_pct === null || scene.cloud_cover_pct === undefined
     ? (locale.value === 'ru' ? 'облачность —' : 'cloud —')
     : (locale.value === 'ru' ? `облачность ${Number(scene.cloud_cover_pct).toFixed(0)}%` : `cloud ${Number(scene.cloud_cover_pct).toFixed(0)}%`)
   return locale.value === 'ru'
-    ? `Спутник: ${dateToken} · ${cloud} · ${scene.provider_account || 'primary'}`
-    : `Satellite: ${dateToken} · ${cloud} · ${scene.provider_account || 'primary'}`
+    ? `Спутник: ${dateToken}${modeLabel ? ` · ${modeLabel}` : ''} · ${cloud} · ${scene.provider_account || 'primary'}`
+    : `Satellite: ${dateToken}${modeLabel ? ` · ${modeLabel}` : ''} · ${cloud} · ${scene.provider_account || 'primary'}`
 })
 
 const debugRunOptions = computed(() => {
@@ -631,6 +458,7 @@ async function refreshDebugTiles() {
 }
 
 async function loadSatelliteLayer(options = {}) {
+  const requestToken = ++satelliteLoadToken
   if (!map || !store.showSatelliteBrowse) {
     syncSatelliteLayer(null)
     return
@@ -648,44 +476,13 @@ async function loadSatelliteLayer(options = {}) {
     height,
     manual: Boolean(options.manual),
   })
+  if (requestToken !== satelliteLoadToken) {
+    return
+  }
   syncSatelliteLayer(payload)
 }
 
-function resolveFieldStyle(feature) {
-  if (store.mergeMode && store.mergeSelectionIds.includes(feature?.get('field_id'))) {
-    return mergeSelectionStyle
-  }
-  const isSelected = store.selectedFieldIds.includes(feature?.get('field_id'))
-  const isManual = feature?.get('source') === 'manual'
-  const baseStyle = isSelected
-    ? (isManual ? selectedManualFieldStyle : getFieldStyleForFeature(feature, true))
-    : (isManual ? manualFieldStyle : getFieldStyleForFeature(feature, false))
-  const styles = Array.isArray(baseStyle) ? [...baseStyle] : [baseStyle]
-  const hasArchive = feature?.get('has_archive')
-  const hasScenarios = feature?.get('has_scenarios')
-  if (hasArchive || hasScenarios) {
-    const geometry = feature.getGeometry()
-    if (geometry) {
-      const extent = geometry.getExtent()
-      const markerPoint = new Point([
-        extent[2] - Math.max((extent[2] - extent[0]) * 0.12, 6),
-        extent[3] - Math.max((extent[3] - extent[1]) * 0.12, 6),
-      ])
-      const markerImage = hasArchive && hasScenarios
-        ? bothMarkersImage
-        : hasArchive
-          ? archiveMarkerImage
-          : scenarioMarkerImage
-      styles.push(new Style({ geometry: markerPoint, image: markerImage }))
-    }
-  }
-  return styles
-}
 
-function resolveZoneStyle(feature) {
-  const zoneCode = String(feature?.get('zone_code') || 'medium')
-  return ZONE_STYLES[zoneCode] || ZONE_STYLES.medium
-}
 
 function mapViewZoomToGridZoom() {
   const zoom = Number(map?.getView()?.getZoom?.() || 11)
@@ -819,7 +616,7 @@ onMounted(() => {
   satelliteLayer = new ImageLayer({ source: null, visible: false, zIndex: 1.5, opacity: 0.94 })
   debugOverlayLayer = new ImageLayer({ source: null, visible: false, zIndex: 10.5, opacity: 0.5 })
   managementZonesLayer = new VectorLayer({ source: managementZonesSource, style: resolveZoneStyle, zIndex: 12, visible: false })
-  fieldsLayer = new VectorLayer({ source: fieldsSource, style: resolveFieldStyle, zIndex: 20 })
+  fieldsLayer = new VectorLayer({ source: fieldsSource, style: (f) => resolveFieldStyle(f, store), zIndex: 20 })
   drawLayer = new VectorLayer({ source: drawSource, style: drawStyle, zIndex: 21 })
 
   map = new Map({
@@ -876,6 +673,7 @@ onMounted(() => {
       hoveredItems.find((item) => item.getProperties()?.kind === 'management_zone')
     if (!feature) {
       tooltip.setPosition(undefined)
+      map.getTargetElement().style.cursor = ''
       return
     }
     const props = feature.getProperties()
@@ -883,10 +681,13 @@ onMounted(() => {
       hoveredFeature = feature
       feature.setStyle(fieldHoverStyle)
       renderFieldTooltipContent(tooltipEl, props)
+      map.getTargetElement().style.cursor = 'pointer'
     } else if (props.kind === 'management_zone') {
       renderManagementZoneTooltipContent(tooltipEl, props)
+      map.getTargetElement().style.cursor = 'pointer'
     } else {
       tooltip.setPosition(undefined)
+      map.getTargetElement().style.cursor = ''
       return
     }
     tooltip.setPosition(event.coordinate)
@@ -994,7 +795,6 @@ watch(
       fieldsLayer?.changed()
     }
   },
-  { deep: true },
 )
 
 watch(
@@ -1017,7 +817,7 @@ watch(
     }
     managementZonesLayer.setVisible(false)
   },
-  { deep: true, immediate: true },
+  { immediate: true },
 )
 
 watch(
@@ -1084,7 +884,6 @@ watch(
     }
     await store.loadDebugLayer(runId, tileId, layerId, { silent: true })
   },
-  { deep: true },
 )
 
 watch(
@@ -1092,7 +891,7 @@ watch(
   () => {
     syncDebugOverlayLayer(store.debugLayerPayload)
   },
-  { deep: true, immediate: true },
+  { immediate: true },
 )
 
 watch(
@@ -1123,11 +922,9 @@ watch(
   () => [store.activeLayerIds, store.visibleRunId],
   () => {
     syncGridLayers()
-    loadSatelliteLayer()
     loadGridLayer()
     renderWindStreaks()
   },
-  { deep: true },
 )
 
 watch(
@@ -1145,9 +942,7 @@ watch(
   () => store.showFieldsOnly,
   () => {
     syncGridLayers()
-    for (const layer of gridLayers) {
-      layer.changed()
-    }
+    loadGridLayer()
     renderWindStreaks()
   },
 )
@@ -1244,6 +1039,7 @@ async function loadGridLayer() {
         aoi_run_id: store.visibleRunId,
         zoom: selectedZoom,
         allow_run_fallback: false,
+        final_fields_only: store.showFieldsOnly,
         minx: extent4326[0],
         miny: extent4326[1],
         maxx: extent4326[2],
@@ -1264,6 +1060,7 @@ async function loadGridLayer() {
           aoi_run_id: store.visibleRunId,
           zoom: 2,
           allow_run_fallback: false,
+          final_fields_only: store.showFieldsOnly,
           minx: extent4326[0],
           miny: extent4326[1],
           maxx: extent4326[2],

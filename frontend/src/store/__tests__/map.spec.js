@@ -648,6 +648,40 @@ describe('map store', () => {
     expect(apiMock.get).toHaveBeenNthCalledWith(2, '/api/v1/fields/field-1/temporal-analytics', expect.any(Object))
   })
 
+  it('requests a lite dashboard first when selecting a field', async () => {
+    apiMock.get
+      .mockResolvedValueOnce({
+        data: {
+          mode: 'single',
+          field: { field_id: 'field-1', source: 'autodetect' },
+          kpis: { prediction_ready: false, archive_count: 0, scenario_count: 0, observation_cells: 0 },
+          archives: [],
+          scenarios: [],
+          data_quality: { metrics_available: [] },
+        },
+      })
+      .mockResolvedValueOnce({
+        data: {
+          mode: 'single',
+          field: { field_id: 'field-1', source: 'autodetect' },
+          kpis: { prediction_ready: false, archive_count: 0, scenario_count: 0, observation_cells: 0 },
+          archives: [],
+          scenarios: [],
+          data_quality: { metrics_available: [] },
+        },
+      })
+
+    const store = useMapStore()
+    await store.selectField({ field_id: 'field-1', source: 'autodetect' })
+
+    expect(apiMock.get).toHaveBeenCalledWith(
+      '/api/v1/fields/field-1/dashboard',
+      expect.objectContaining({
+        params: { lite: true },
+      }),
+    )
+  })
+
   it('starts temporal backfill for historical ranges and refreshes the series after job completion', async () => {
     apiMock.get
       .mockResolvedValueOnce({

@@ -1605,6 +1605,7 @@ def _finalize_detection_candidates(
     """Attach kept candidates to final fields and classify terminal reject reasons."""
     from geoalchemy2.shape import to_shape
     from shapely.geometry import shape as shapely_shape
+    from sqlalchemy import select as sa_select
 
     lifecycle_counts = {
         "matched_to_final": 0,
@@ -1614,9 +1615,7 @@ def _finalize_detection_candidates(
     }
 
     final_fields = list(
-        session.query(FieldModel)
-        .filter(FieldModel.aoi_run_id == run_id)
-        .all()
+        session.execute(sa_select(FieldModel).where(FieldModel.aoi_run_id == run_id)).scalars().all()
     )
     final_field_geoms: list[tuple[uuid.UUID, Any]] = []
     for field in final_fields:
@@ -1640,9 +1639,9 @@ def _finalize_detection_candidates(
             continue
 
     candidate_rows = list(
-        session.query(FieldDetectionCandidateModel)
-        .filter(FieldDetectionCandidateModel.aoi_run_id == run_id)
-        .all()
+        session.execute(
+            sa_select(FieldDetectionCandidateModel).where(FieldDetectionCandidateModel.aoi_run_id == run_id)
+        ).scalars().all()
     )
 
     for row in candidate_rows:
@@ -2183,7 +2182,7 @@ def _mark_run_failed_best_effort(
         from sqlalchemy.orm import Session
         from storage.db import AoiRun
 
-        engine = create_engine(_default_database_url_sync(), echo=False)
+        engine = create_engine(_default_database_url_sync(), echo=False)  # noqa: duplicate-import
         try:
             with Session(engine) as session:
                 run = session.get(AoiRun, run_id)
@@ -2236,7 +2235,13 @@ def run_autodetect(self, run_id_str: str, use_sam: bool | None = None) -> dict:
     try:
         base_settings = get_settings()
         failure_stage = "db_engine_init"
-        from sqlalchemy import create_engine
+        from sqlalchemy import (
+            create_engine,
+            delete as sa_delete,
+            insert as sa_insert,
+            select as sa_select,
+            text as sa_text,
+        )
         from sqlalchemy.orm import Session
         from storage.db import (
             ActiveLearningCandidate,
@@ -5516,7 +5521,7 @@ def run_autodetect(self, run_id_str: str, use_sam: bool | None = None) -> dict:
             from geoalchemy2.shape import from_shape
             from shapely.geometry import MultiPolygon as ShapelyMultiPolygon
 
-            session.query(GridCell).filter(GridCell.aoi_run_id == run_id).delete(synchronize_session=False)
+            session.execute(sa_delete(GridCell).where(GridCell.aoi_run_id == run_id))
             inserted_fields: list[tuple[Field, dict[str, Any], dict[str, Any]]] = []
             if grid_cell_rows:
                 raw_grid_cell_count = len(grid_cell_rows)
@@ -5549,8 +5554,8 @@ def run_autodetect(self, run_id_str: str, use_sam: bool | None = None) -> dict:
                     for r in grid_cell_rows
                 ]
                 for chunk_start in range(0, len(grid_mappings), BULK_CHUNK):
-                    session.bulk_insert_mappings(
-                        GridCell,
+                    session.execute(
+                        sa_insert(GridCell),
                         grid_mappings[chunk_start : chunk_start + BULK_CHUNK],
                     )
                 del grid_mappings  # Free memory after insert
@@ -5712,7 +5717,7 @@ def run_autodetect(self, run_id_str: str, use_sam: bool | None = None) -> dict:
                     simplify_tol_deg=topology_tol_deg,
                 ):
                     session.execute(
-                        __import__("sqlalchemy").text(sql),
+                        sa_text(sql),
                         {"run_id": str(run_id)},
                     )
                 session.commit()
@@ -5807,3 +5812,54 @@ def run_autodetect(self, run_id_str: str, use_sam: bool | None = None) -> dict:
             except Exception:
                 logger.warning("autodetect_engine_dispose_failed", exc_info=True)
         ACTIVE_RUNS.dec()
+
+
+@celery.task(name="tasks.autodetect.cleanup_zombie_runs")
+def cleanup_zombie_runs() -> dict:
+    """Mark runs stuck in 'running'/'queued' state as failed if no active Celery task processes them."""
+    from datetime import datetime, timedelta, timezone
+
+    from sqlalchemy import create_engine, text
+    from core.config import get_settings
+
+    settings = get_settings()
+
+    # Collect run IDs currently being processed by Celery
+    try:
+        inspect = celery.control.inspect(timeout=2.0)
+        active = inspect.active() or {}
+        reserved = inspect.reserved() or {}
+    except Exception:
+        active, reserved = {}, {}
+
+    live_run_ids: set[str] = set()
+    for tasks_list in (*active.values(), *reserved.values()):
+        for t in tasks_list or []:
+            args = t.get("args") or []
+            if args:
+                live_run_ids.add(str(args[0]))
+
+    # Use sync engine (psycopg) to avoid asyncpg event-loop conflicts in Celery
+    sync_engine = create_engine(settings.DATABASE_URL_SYNC, pool_pre_ping=True)
+    cutoff = datetime.now(timezone.utc) - timedelta(minutes=10)
+    try:
+        with sync_engine.connect() as conn:
+            result = conn.execute(
+                text(
+                    "UPDATE aoi_runs SET status='failed', error_msg='Worker terminated unexpectedly (auto-cleanup)'"
+                    " WHERE status IN ('running', 'queued')"
+                    " AND created_at < :cutoff"
+                    " AND id::text != ALL(:live_ids)"
+                    " RETURNING id"
+                ),
+                {"cutoff": cutoff, "live_ids": list(live_run_ids) or [""]},
+            )
+            cleaned = [str(r[0]) for r in result.fetchall()]
+            conn.commit()
+    finally:
+        sync_engine.dispose()
+
+    if cleaned:
+        logger.warning("zombie_runs_cleaned", count=len(cleaned), run_ids=cleaned)
+    return {"cleaned": len(cleaned), "run_ids": cleaned}
+

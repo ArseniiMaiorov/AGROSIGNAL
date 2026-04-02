@@ -1,28 +1,26 @@
 <template>
   <section class="auth-shell" data-testid="auth-overlay">
     <div class="auth-card">
-      <div class="auth-eyebrow">Tenant Access</div>
-      <h1>AgroMap Control Surface</h1>
-      <p class="auth-copy">
-        Вход обязателен: backend теперь работает в tenant-scoped режиме с RBAC, imports и model registry.
-      </p>
+      <div class="auth-eyebrow">{{ t('auth.eyebrow') }}</div>
+      <h1>{{ t('auth.title') }}</h1>
+      <p class="auth-copy">{{ t('auth.subtitle') }}</p>
 
       <div v-if="orgHint" class="auth-bootstrap">
-        <div>{{ locale === 'ru' ? 'Bootstrap email' : 'Bootstrap email' }}: <strong>{{ effectiveEmailHint }}</strong></div>
-        <div>{{ locale === 'ru' ? 'Организация' : 'Organization' }}: <strong>{{ orgHint }}</strong></div>
+        <div>{{ t('auth.bootstrapEmail') }}: <strong>{{ effectiveEmailHint }}</strong></div>
+        <div>{{ t('auth.organization') }}: <strong>{{ orgHint }}</strong></div>
       </div>
 
       <form class="auth-form" @submit.prevent="submit">
         <label>
-          <span>Email</span>
+          <span>{{ t('auth.email') }}</span>
           <input v-model.trim="email" data-testid="auth-email" type="email" autocomplete="username" required />
         </label>
         <label>
-          <span>Password</span>
+          <span>{{ t('auth.password') }}</span>
           <input v-model="password" data-testid="auth-password" type="password" autocomplete="current-password" required />
         </label>
         <label>
-          <span>Organization Slug</span>
+          <span>{{ t('auth.organizationSlug') }}</span>
           <input
             v-model.trim="organizationSlug"
             data-testid="auth-org"
@@ -33,14 +31,12 @@
         </label>
 
         <button class="auth-submit" data-testid="auth-submit" :disabled="auth.isLoading">
-          {{ auth.isLoading ? 'Signing In...' : 'Sign In' }}
+          {{ auth.isLoading ? t('auth.signingIn') : t('auth.signIn') }}
         </button>
       </form>
 
       <p v-if="auth.error" class="auth-error">{{ auth.error }}</p>
-      <p class="auth-hint">
-        Bootstrap admin по умолчанию берётся из backend `.env`: `AUTH_BOOTSTRAP_ADMIN_EMAIL` / `AUTH_BOOTSTRAP_ADMIN_PASSWORD`.
-      </p>
+      <p class="auth-hint">{{ t('auth.hint') }}</p>
     </div>
   </section>
 </template>
@@ -49,7 +45,7 @@
 import { computed, ref, watch } from 'vue'
 
 import { useAuthStore } from '../store/auth'
-import { locale } from '../utils/i18n'
+import { t } from '../utils/i18n'
 
 const props = defineProps({
   initialEmail: {
@@ -70,7 +66,13 @@ const auth = useAuthStore()
 const email = ref('')
 const password = ref('')
 const organizationSlug = ref('')
-const orgHint = computed(() => props.initialOrganizationName || props.initialOrganizationSlug || '')
+const orgHint = computed(() => {
+  const value = props.initialOrganizationName || props.initialOrganizationSlug || ''
+  if (value === 'Default Organization') {
+    return t('auth.defaultOrganizationName')
+  }
+  return value
+})
 const effectiveEmailHint = computed(() => props.initialEmail || 'admin@local')
 
 watch(

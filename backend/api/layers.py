@@ -74,6 +74,7 @@ async def get_layer_grid(
     aoi_run_id: UUID = Query(...),
     zoom: int = Query(2, ge=0, le=4),
     allow_run_fallback: bool = Query(False),
+    final_fields_only: bool = Query(False),
     minx: float = Query(...),
     miny: float = Query(...),
     maxx: float = Query(...),
@@ -92,6 +93,7 @@ async def get_layer_grid(
         run_id=aoi_run_id,
         zoom=zoom,
         bbox=bbox,
+        final_fields_only=final_fields_only,
     )
 
     used_fallback = False
@@ -103,6 +105,7 @@ async def get_layer_grid(
                 run_id=fallback_run_id,
                 zoom=zoom,
                 bbox=bbox,
+                final_fields_only=final_fields_only,
             )
             used_fallback = bool(geojson.get("features"))
 

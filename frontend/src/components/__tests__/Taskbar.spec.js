@@ -25,6 +25,9 @@ describe('Taskbar', () => {
 
     await wrapper.get('[data-testid="taskbar-start"]').trigger('click')
 
+    expect(wrapper.text()).toContain('Хранение данных')
+    expect(wrapper.text()).toContain('Стандартный')
+
     const selects = wrapper.findAll('select')
     await selects[0].setValue('quality')
     await selects[1].setValue('15')

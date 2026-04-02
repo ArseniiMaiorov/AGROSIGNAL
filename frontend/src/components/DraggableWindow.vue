@@ -32,15 +32,15 @@ let startMouseY = 0
 let startPosX = 0
 let startPosY = 0
 
-// Global z-index counter for stacking
-let _maxZ = 10
+// Global z-index counter for stacking (capped well below taskbar at 9000)
+const WINDOW_Z_MAX = 800
 if (typeof window !== 'undefined') {
   window.__dragWindowZ = window.__dragWindowZ || 10
 }
 
 function bringToFront() {
   if (typeof window !== 'undefined') {
-    window.__dragWindowZ = (window.__dragWindowZ || 10) + 1
+    window.__dragWindowZ = Math.min((window.__dragWindowZ || 10) + 1, WINDOW_Z_MAX)
     zIndex.value = window.__dragWindowZ
   }
 }

@@ -1,6 +1,6 @@
 import { reactive, computed } from 'vue'
 
-const THEME_KEY = 'agrovision-theme'
+const THEME_KEY = 'terrainfo-theme'
 
 const themes = {
   light: {

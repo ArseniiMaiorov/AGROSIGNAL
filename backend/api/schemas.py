@@ -205,6 +205,9 @@ class RunStatus(BaseModel):
     updated_at: str | None = None
     last_heartbeat_ts: str | None = None
     stale_running: bool = False
+    queue_ahead: int = 0
+    blocking_run_id: UUID | None = None
+    blocking_status: str | None = None
     elapsed_s: int | None = None
     estimated_remaining_s: int | None = None
     qc_mode: str | None = None
@@ -241,6 +244,9 @@ class RunResult(BaseModel):
     updated_at: str | None = None
     last_heartbeat_ts: str | None = None
     stale_running: bool = False
+    queue_ahead: int = 0
+    blocking_run_id: UUID | None = None
+    blocking_status: str | None = None
     elapsed_s: int | None = None
     estimated_remaining_s: int | None = None
     qc_mode: str | None = None
@@ -423,17 +429,58 @@ class BootstrapResponse(BaseModel):
     freshness: FreshnessMeta | None = None
 
 
+class StorageAuthPromptResponse(BaseModel):
+    provider_label: str
+    title: str
+    description: str
+    steps: list[str] = Field(default_factory=list)
+    login_url: str | None = None
+    suggested_command: str | None = None
+
+
+class StorageConfigRequest(BaseModel):
+    storage_mode: str = Field("local", pattern="^(local|cloud)$")
+    cloud_url: str | None = None
+
+    @model_validator(mode="after")
+    def validate_cloud_mode(self):
+        if self.storage_mode == "cloud" and not str(self.cloud_url or "").strip():
+            raise ValueError("cloud_url must be provided when storage_mode='cloud'")
+        return self
+
+
+class StorageConfigResponse(BaseModel):
+    storage_mode: str
+    cloud_url: str | None = None
+    provider: str | None = None
+    provider_label: str | None = None
+    status: str
+    message: str | None = None
+    auth_state: str = "not_required"
+    auth_required: bool = False
+    rclone_available: bool = False
+    remote_name: str | None = None
+    hierarchy_ready: bool = False
+    workspace_root: str | None = None
+    workspace_folders: list[str] = Field(default_factory=list)
+    auth_prompt: StorageAuthPromptResponse | None = None
+    updated_at: str | None = None
+
+
 class SatelliteBrowseResponse(BaseModel):
     bbox: list[float]
     width: int
     height: int
+    status: str = "ready"
     requested_date: str | None = None
+    resolved_date: str | None = None
     requested_window: dict[str, str] | None = None
     provider: str
     provider_account: str | None = None
     failover_level: int = 0
     cloud_cover_pct: float | None = None
-    image_base64: str
+    valid_coverage_pct: float | None = None
+    image_base64: str | None = None
     freshness: FreshnessMeta | None = None
 
 

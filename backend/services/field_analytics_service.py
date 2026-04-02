@@ -64,6 +64,7 @@ class FieldAnalyticsService:
         organization_id: UUID,
         date_from: date | None = None,
         date_to: date | None = None,
+        lite: bool = False,
     ) -> dict[str, Any]:
         field = (
             await self.db.execute(
@@ -73,6 +74,43 @@ class FieldAnalyticsService:
         if field is None:
             raise ValueError("Поле не найдено")
 
+        runtime_map = await self._load_run_runtime_map([field.aoi_run_id], organization_id=organization_id)
+        archives = await self._list_archives(field.id, organization_id=organization_id)
+        scenarios = await self._list_scenarios(field.id, organization_id=organization_id)
+
+        if lite:
+            current_metrics = await self._load_snapshot_metrics(
+                field.id,
+                organization_id=organization_id,
+                run_id=field.aoi_run_id,
+            )
+            prediction_ready = await self._has_prediction(field.id, organization_id=organization_id)
+            observation_cells = self._observation_cells_from_metrics(current_metrics)
+            return {
+                "mode": "single",
+                "field": self._field_to_dict(field, runtime_map=runtime_map),
+                "kpis": {
+                    "prediction_ready": prediction_ready,
+                    "archive_count": len(archives),
+                    "scenario_count": len(scenarios),
+                    "observation_cells": observation_cells,
+                },
+                "current_metrics": current_metrics,
+                "prediction": None,
+                "analytics_summary": {},
+                "supported_sections": {},
+                "zones_summary": {},
+                "archives": archives,
+                "scenarios": scenarios,
+                "data_quality": {
+                    "observation_cells": observation_cells,
+                    "metrics_available": sorted(current_metrics.keys()),
+                    "has_time_series": bool(current_metrics),
+                    "has_prediction": prediction_ready,
+                    "has_solar_radiation": False,
+                },
+            }
+
         current_metrics, raw_values = await self._collect_field_metrics(field)
         await self._ensure_series(field, current_metrics)
 
@@ -81,7 +119,6 @@ class FieldAnalyticsService:
             organization_id=organization_id,
             field=field,
         )
-        runtime_map = await self._load_run_runtime_map([field.aoi_run_id], organization_id=organization_id)
         if latest_prediction is not None:
             analytics_summary = {
                 "current_stage": (latest_prediction.get("phenology") or {}).get("stage_label"),
@@ -116,19 +153,11 @@ class FieldAnalyticsService:
             )).get("summary") or {}
             analytics_summary = dict(temporal_analytics.get("analytics_summary") or {})
             supported_sections = dict(temporal_analytics.get("supported_sections") or {})
-        archives = await self._list_archives(field.id, organization_id=organization_id)
-        scenarios = await self._list_scenarios(field.id, organization_id=organization_id)
         series = await self._load_series(field.id, organization_id=organization_id, date_from=date_from, date_to=date_to)
         histograms = self._build_histograms(raw_values)
         solar_series = await self._load_weekly_solar_series(field.id, organization_id=organization_id)
 
-        observation_cells = 0
-        if current_metrics:
-            observation_cells = int(round(float(np.mean([
-                metric_payload["coverage"]
-                for metric_payload in current_metrics.values()
-                if metric_payload["coverage"] is not None
-            ] or [0.0]))))
+        observation_cells = self._observation_cells_from_metrics(current_metrics)
 
         return {
             "mode": "single",
@@ -157,6 +186,49 @@ class FieldAnalyticsService:
                 "has_solar_radiation": bool(solar_series),
             },
         }
+
+    async def _has_prediction(self, field_id: UUID, *, organization_id: UUID) -> bool:
+        result = await self.db.execute(
+            select(YieldPrediction.id)
+            .where(YieldPrediction.organization_id == organization_id)
+            .where(YieldPrediction.field_id == field_id)
+            .order_by(desc(YieldPrediction.prediction_date))
+            .limit(1)
+        )
+        return result.first() is not None
+
+    async def _load_snapshot_metrics(
+        self,
+        field_id: UUID,
+        *,
+        organization_id: UUID,
+        run_id: UUID | None = None,
+    ) -> dict[str, Any]:
+        stmt = (
+            select(FieldMetricSeries)
+            .where(FieldMetricSeries.organization_id == organization_id)
+            .where(FieldMetricSeries.field_id == field_id)
+            .where(FieldMetricSeries.source == "run_snapshot")
+            .order_by(FieldMetricSeries.metric.asc(), FieldMetricSeries.observed_at.desc())
+        )
+        if run_id is not None:
+            stmt = stmt.where(FieldMetricSeries.aoi_run_id == run_id)
+        rows = (await self.db.execute(stmt)).scalars().all()
+        metrics: dict[str, Any] = {}
+        for row in rows:
+            if row.metric in metrics:
+                continue
+            metrics[row.metric] = {
+                "label": METRIC_LABELS.get(row.metric, row.metric.upper()),
+                "coverage": round(float(row.coverage or 0.0), 4) if row.coverage is not None else None,
+                "mean": row.value_mean,
+                "min": row.value_min,
+                "max": row.value_max,
+                "median": row.value_median,
+                "p25": row.value_p25,
+                "p75": row.value_p75,
+            }
+        return metrics
 
     async def get_group_dashboard(self, field_ids: list[UUID], *, organization_id: UUID) -> dict[str, Any]:
         ordered_ids = list(dict.fromkeys(field_ids))
@@ -757,6 +829,16 @@ class FieldAnalyticsService:
                 "counts": [int(item) for item in counts.tolist()],
             }
         return histograms
+
+    @staticmethod
+    def _observation_cells_from_metrics(current_metrics: dict[str, Any]) -> int:
+        if not current_metrics:
+            return 0
+        return int(round(float(np.mean([
+            metric_payload["coverage"]
+            for metric_payload in current_metrics.values()
+            if metric_payload.get("coverage") is not None
+        ] or [0.0]))))
 
     async def _load_run_runtime_map(
         self,

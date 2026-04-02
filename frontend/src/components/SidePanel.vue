@@ -49,7 +49,7 @@
         <div class="section-caption">{{ t('control.algorithm') }}</div>
         <div class="preset-strip">
           <span>{{ locale === 'ru' ? 'Профиль' : 'Preset' }}</span>
-          <strong>{{ store.detectionPreset }}</strong>
+          <strong>{{ store.activeDetectionPreset.label }}</strong>
         </div>
         <div class="preset-description">{{ store.activeDetectionPreset.description }}</div>
         <div v-if="!store.expertMode" class="action-note">
@@ -163,7 +163,7 @@
         </div>
         <div class="layer-group-label">{{ t('control.spectralGroup') }}</div>
         <div class="layer-list">
-          <label v-for="layer in spectralLayers" :key="layer.id" class="layer-row">
+          <label v-for="layer in spectralLayers" :key="layer.id" class="layer-row" :data-btip="layer.btip">
             <input
               type="checkbox"
               :checked="store.activeLayers[layer.id]"
@@ -174,7 +174,7 @@
         </div>
         <div class="layer-group-label">{{ t('control.weatherGroup') }}</div>
         <div class="layer-list">
-          <label v-for="layer in weatherLayers" :key="layer.id" class="layer-row">
+          <label v-for="layer in weatherLayers" :key="layer.id" class="layer-row" :data-btip="layer.btip">
             <input
               type="checkbox"
               :checked="store.activeLayers[layer.id]"
@@ -187,6 +187,7 @@
           <button
             class="mode-btn"
             :class="{ active: store.showFieldsOnly }"
+            data-btip="Показывать спектральные слои (NDVI, NDMI и т.д.) только на распознанных полях."
             @click="store.showFieldsOnly = true"
           >
             {{ t('control.onFields') }}
@@ -194,6 +195,7 @@
           <button
             class="mode-btn"
             :class="{ active: !store.showFieldsOnly }"
+            data-btip="Показывать спектральные слои на всей видимой карте, включая области вне полей."
             @click="store.showFieldsOnly = false"
           >
             {{ t('control.fullMap') }}
@@ -361,25 +363,31 @@ const satelliteSceneLabel = computed(() => {
   if (!scene) {
     return t('control.satelliteScenePending')
   }
-  const dateToken = scene.requested_date || scene.requested_window?.start || 'auto'
+  if (scene.status === 'no_data') {
+    return t('control.satelliteSceneNoData')
+  }
+  const dateToken = scene.resolved_date || scene.requested_date || scene.requested_window?.start || 'auto'
+  const modeLabel = scene.status === 'fallback_window'
+    ? (locale.value === 'ru' ? 'автоподбор по окну' : 'window fallback')
+    : ''
   const cloud = scene.cloud_cover_pct === null || scene.cloud_cover_pct === undefined ? '—' : `${Number(scene.cloud_cover_pct).toFixed(0)}%`
   return locale.value === 'ru'
-    ? `${dateToken} · облачность ${cloud} · ${scene.provider_account || 'primary'}`
-    : `${dateToken} · cloud ${cloud} · ${scene.provider_account || 'primary'}`
+    ? `${dateToken}${modeLabel ? ` · ${modeLabel}` : ''} · облачность ${cloud} · ${scene.provider_account || 'primary'}`
+    : `${dateToken}${modeLabel ? ` · ${modeLabel}` : ''} · cloud ${cloud} · ${scene.provider_account || 'primary'}`
 })
 
 const spectralLayers = [
-  { id: 'ndvi' },
-  { id: 'ndwi' },
-  { id: 'ndmi' },
-  { id: 'bsi' },
+  { id: 'ndvi', btip: 'Индекс зелёной вегетации (NDVI). Зелёный = густая растительность, красный = голая почва или стресс.' },
+  { id: 'ndwi', btip: 'Водный индекс (NDWI). Синий = вода/переувлажнение, коричневый = суша.' },
+  { id: 'ndmi', btip: 'Влажность листьев (NDMI). Синий = высокая влажность, красный = засуха/стресс.' },
+  { id: 'bsi', btip: 'Индекс голой почвы (BSI). Яркий = обнажённая почва, тёмный = покрытая растительностью.' },
 ]
 const weatherLayers = [
-  { id: 'precipitation' },
-  { id: 'wind' },
-  { id: 'soil_moisture' },
-  { id: 'gdd' },
-  { id: 'vpd' },
+  { id: 'precipitation', btip: 'Осадки за период. Интенсивность синего соответствует количеству осадков.' },
+  { id: 'wind', btip: 'Направление и сила ветра. Стрелки показывают направление, длина — скорость.' },
+  { id: 'soil_moisture', btip: 'Влажность почвы. Тёмно-синий = насыщенный, светлый = сухой.' },
+  { id: 'gdd', btip: 'Градусо-дни роста (GDD). Тепловой ресурс сезона для оценки стадии развития культур.' },
+  { id: 'vpd', btip: 'Дефицит давления пара (VPD). Высокий VPD = потенциальный тепловой/водный стресс.' },
 ]
 </script>
 

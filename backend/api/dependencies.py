@@ -22,6 +22,22 @@ class RequestContext:
     permissions: frozenset[str]
 
 
+async def _release_db_connection(db: AsyncSession) -> None:
+    """Release the checked-out connection after auth lookups.
+
+    Request handlers may spend a long time in external APIs after auth succeeds.
+    Rolling back the read-only auth transaction lets SQLAlchemy return the
+    connection to the pool until the route actually needs the session again.
+    """
+    try:
+        if db.in_transaction():
+            await db.rollback()
+    except Exception:
+        # Best-effort pool pressure relief. Route code can still proceed even if
+        # SQLAlchemy already released the transaction underneath.
+        return
+
+
 async def _build_context(
     *,
     db: AsyncSession,
@@ -87,6 +103,7 @@ async def get_current_context(
             email=payload.email,
         )
         request.state.auth_context = context
+        await _release_db_connection(db)
         return context
 
     auth_header = request.headers.get("Authorization", "").strip()
@@ -116,6 +133,7 @@ async def get_current_context(
         email=str(payload.get("email") or user.email),
     )
     request.state.auth_context = context
+    await _release_db_connection(db)
     return context
 
 

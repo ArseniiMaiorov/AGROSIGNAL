@@ -418,8 +418,8 @@ def test_process_request_fails_over_to_reserve_account():
         update={
             "SH_CLIENT_ID": "primary-id",
             "SH_CLIENT_SECRET": "primary-secret",
-            "SH_CLIENT_ID_reserv": "reserve-id",
-            "SH_CLIENT_SECRET_reserv": "reserve-secret",
+            "SH_CLIENT_ID_RESERVE": "reserve-id",
+            "SH_CLIENT_SECRET_RESERVE": "reserve-secret",
             "SH_FAILOVER_ENABLED": True,
             "SH_MAX_RETRIES": 0,
         }
@@ -449,7 +449,7 @@ def test_process_request_fails_over_to_reserve_account():
     )
 
     assert response.status_code == 200
-    assert account_alias == "reserv"
+    assert account_alias == "reserve"
     assert failover_level == 1
 
 
@@ -460,8 +460,8 @@ def test_process_request_puts_exhausted_account_on_cooldown_and_skips_it():
         update={
             "SH_CLIENT_ID": "primary-id",
             "SH_CLIENT_SECRET": "primary-secret",
-            "SH_CLIENT_ID_reserv": "reserve-id",
-            "SH_CLIENT_SECRET_reserv": "reserve-secret",
+            "SH_CLIENT_ID_RESERVE": "reserve-id",
+            "SH_CLIENT_SECRET_RESERVE": "reserve-secret",
             "SH_FAILOVER_ENABLED": True,
             "SH_MAX_RETRIES": 0,
             "SH_FAILOVER_COOLDOWN_S": 900,

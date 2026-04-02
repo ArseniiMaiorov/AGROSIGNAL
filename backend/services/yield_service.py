@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Any
 from uuid import UUID
 
@@ -79,6 +79,7 @@ OBSERVED_FEATURE_NAMES: tuple[str, ...] = (
 )
 
 ALL_FEATURE_NAMES: tuple[str, ...] = CALIBRATION_FEATURE_NAMES + OBSERVED_FEATURE_NAMES
+MIN_RELIABLE_CROP_SUITABILITY_OBSERVED_DAYS = 150
 
 
 @dataclass(slots=True)
@@ -356,7 +357,7 @@ class YieldService:
                 ndvi_auc_data=ndvi_auc_data,
             )
         training_rows = await self._load_training_rows(organization_id=organization_id, crop_code=crop.code)
-        crop_suitability = _evaluate_crop_suitability(crop, applicability_features)
+        crop_suitability = _evaluate_crop_suitability(crop, applicability_features, seasonal_weather=seasonal_weather)
 
         coverage_score = round(
             float(sum(1 for value in applicability_features.values() if value is not None))
@@ -887,6 +888,23 @@ class YieldService:
                     seasonal_weather = dict(seasonal_weather)
                     # _sr is weekly MJ/m²; keep in weekly units, clip at 245 MJ/week (35 MJ/day * 7)
                     seasonal_weather["solar_radiation_mean"] = float(np.clip(_sr * cloud_cover_factor, 0.0, 245.0))
+
+            temperature_delta_c = float(scenario_adjustments.get("temperature_delta_c") or 0.0)
+            if temperature_delta_c != 0.0:
+                seasonal_weather = dict(seasonal_weather)
+                
+                _base_temp = _as_optional_float(seasonal_weather.get("temperature_mean_c"))
+                if _base_temp is not None:
+                    seasonal_weather["temperature_mean_c"] = float(_base_temp + temperature_delta_c)
+                
+                _gdd = _as_optional_float(seasonal_weather.get("gdd_sum"))
+                if _gdd is not None:
+                    _days = _as_optional_float(seasonal_weather.get("observed_days")) or 120.0
+                    seasonal_weather["gdd_sum"] = max(0.0, float(_gdd + temperature_delta_c * _days))
+                
+                _vpd = _as_optional_float(seasonal_weather.get("vpd_mean"))
+                if _vpd is not None:
+                    seasonal_weather["vpd_mean"] = max(0.0, float(_vpd + temperature_delta_c * 0.06))
 
         geometry_confidence = float(field.quality_score) if field.quality_score is not None else None
         ndvi_auc_data = ndvi_auc_data or {}
@@ -2107,13 +2125,32 @@ def _crop_suitability_profile(crop: Crop) -> dict[str, float | str]:
     }
 
 
-def _evaluate_crop_suitability(crop: Crop, features: dict[str, float | None]) -> dict[str, Any]:
+def _evaluate_crop_suitability(
+    crop: Crop,
+    features: dict[str, float | None],
+    *,
+    seasonal_weather: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     profile = _crop_suitability_profile(crop)
+    seasonal_weather = dict(seasonal_weather or {})
     latitude = _as_optional_float(features.get("latitude"))
     gdd_sum = _as_optional_float(features.get("seasonal_gdd_sum"))
     precipitation_sum = _as_optional_float(features.get("seasonal_precipitation_mm"))
     temp_mean = _as_optional_float(features.get("seasonal_temperature_mean_c"))
     observed_days = int(_as_optional_float(features.get("seasonal_observed_days")) or 0)
+    season_year_raw = seasonal_weather.get("season_year")
+    season_year = int(season_year_raw) if season_year_raw not in (None, "") else None
+    today_utc = datetime.now(timezone.utc).date()
+    if season_year is not None:
+        if season_year < today_utc.year:
+            seasonal_window_reliable = True
+        elif season_year > today_utc.year:
+            seasonal_window_reliable = False
+        else:
+            season_end = date(season_year, 10, 31)
+            seasonal_window_reliable = today_utc >= season_end and observed_days >= MIN_RELIABLE_CROP_SUITABILITY_OBSERVED_DAYS
+    else:
+        seasonal_window_reliable = observed_days >= MIN_RELIABLE_CROP_SUITABILITY_OBSERVED_DAYS
 
     score = 1.0
     warnings: list[str] = []
@@ -2133,47 +2170,54 @@ def _evaluate_crop_suitability(crop: Crop, features: dict[str, float | None]) ->
             warnings.append("Широта выше оптимального диапазона культуры: ожидается сокращение вегетационного окна.")
             reasons.append("latitude_penalty")
 
-    gdd_min = float(profile["gdd_min"])
-    gdd_optimal = float(profile["gdd_optimal"])
-    if gdd_sum is not None and gdd_sum > 0:
-        if gdd_sum < gdd_min:
-            score *= float(np.clip(0.25 + (gdd_sum / max(gdd_min, 1.0)) * 0.55, 0.20, 0.80))
-            warnings.append("Сезонная сумма GDD ниже минимально комфортной для культуры.")
-            reasons.append("gdd_deficit")
-        elif gdd_sum < gdd_optimal:
-            ratio = (gdd_sum - gdd_min) / max(gdd_optimal - gdd_min, 1e-6)
-            score *= float(np.clip(0.88 + ratio * 0.12, 0.88, 1.0))
-        elif gdd_sum > gdd_optimal * 1.35:
-            score *= 0.92
-            warnings.append("Сумма GDD заметно выше оптимума: возможен ускоренный стрессовый цикл культуры.")
-            reasons.append("gdd_excess")
-    elif str(profile["family"]) == "warm_season":
-        score *= 0.80
-        warnings.append("Для теплолюбивой культуры нет сезонного GDD-профиля: доверие к прогнозу снижено.")
-        reasons.append("gdd_missing")
+    if seasonal_window_reliable:
+        gdd_min = float(profile["gdd_min"])
+        gdd_optimal = float(profile["gdd_optimal"])
+        if gdd_sum is not None and gdd_sum > 0:
+            if gdd_sum < gdd_min:
+                score *= float(np.clip(0.25 + (gdd_sum / max(gdd_min, 1.0)) * 0.55, 0.20, 0.80))
+                warnings.append("Сезонная сумма GDD ниже минимально комфортной для культуры.")
+                reasons.append("gdd_deficit")
+            elif gdd_sum < gdd_optimal:
+                ratio = (gdd_sum - gdd_min) / max(gdd_optimal - gdd_min, 1e-6)
+                score *= float(np.clip(0.88 + ratio * 0.12, 0.88, 1.0))
+            elif gdd_sum > gdd_optimal * 1.35:
+                score *= 0.92
+                warnings.append("Сумма GDD заметно выше оптимума: возможен ускоренный стрессовый цикл культуры.")
+                reasons.append("gdd_excess")
+        elif str(profile["family"]) == "warm_season":
+            score *= 0.80
+            warnings.append("Для теплолюбивой культуры нет сезонного GDD-профиля: доверие к прогнозу снижено.")
+            reasons.append("gdd_missing")
 
-    precip_min = float(profile["precip_min"])
-    precip_optimal = float(profile["precip_optimal"])
-    precip_high = float(profile["precip_high"])
-    if precipitation_sum is not None and precipitation_sum > 0:
-        if precipitation_sum < precip_min:
-            deficit = (precip_min - precipitation_sum) / max(precip_min, 1.0)
-            score *= float(np.clip(0.92 - deficit * 0.40, 0.45, 0.92))
-            warnings.append("Сезонный водный баланс ниже комфортного диапазона культуры.")
-            reasons.append("precipitation_deficit")
-        elif precipitation_sum > precip_high:
-            excess = (precipitation_sum - precip_high) / max(precip_high, 1.0)
-            score *= float(np.clip(0.95 - excess * 0.30, 0.50, 0.95))
-            warnings.append("Осадков больше оптимума: растёт риск переувлажнения и потерь от водного стресса.")
-            reasons.append("precipitation_excess")
-        elif precipitation_sum < precip_optimal:
-            ratio = (precipitation_sum - precip_min) / max(precip_optimal - precip_min, 1e-6)
-            score *= float(np.clip(0.92 + ratio * 0.08, 0.92, 1.0))
+        precip_min = float(profile["precip_min"])
+        precip_optimal = float(profile["precip_optimal"])
+        precip_high = float(profile["precip_high"])
+        if precipitation_sum is not None and precipitation_sum > 0:
+            if precipitation_sum < precip_min:
+                deficit = (precip_min - precipitation_sum) / max(precip_min, 1.0)
+                score *= float(np.clip(0.92 - deficit * 0.40, 0.45, 0.92))
+                warnings.append("Сезонный водный баланс ниже комфортного диапазона культуры.")
+                reasons.append("precipitation_deficit")
+            elif precipitation_sum > precip_high:
+                excess = (precipitation_sum - precip_high) / max(precip_high, 1.0)
+                score *= float(np.clip(0.95 - excess * 0.30, 0.50, 0.95))
+                warnings.append("Осадков больше оптимума: растёт риск переувлажнения и потерь от водного стресса.")
+                reasons.append("precipitation_excess")
+            elif precipitation_sum < precip_optimal:
+                ratio = (precipitation_sum - precip_min) / max(precip_optimal - precip_min, 1e-6)
+                score *= float(np.clip(0.92 + ratio * 0.08, 0.92, 1.0))
 
-    if temp_mean is not None and str(profile["family"]) == "warm_season" and temp_mean < 11.0:
-        score *= 0.75
-        warnings.append("Средняя температура сезона слишком низка для теплолюбивой культуры.")
-        reasons.append("temperature_deficit")
+        if temp_mean is not None and str(profile["family"]) == "warm_season" and temp_mean < 11.0:
+            score *= 0.75
+            warnings.append("Средняя температура сезона слишком низка для теплолюбивой культуры.")
+            reasons.append("temperature_deficit")
+    elif any(value is not None for value in (gdd_sum, precipitation_sum, temp_mean)):
+        warnings.append(
+            "Сезон ещё не накопил репрезентативную погодную историю: пригодность оценивается предварительно,"
+            " без жёсткого отсечения по накопленным GDD и сезонным осадкам."
+        )
+        reasons.append("seasonal_window_incomplete")
 
     score = float(np.clip(score, 0.0, 1.0))
     if score >= 0.82:
@@ -2191,13 +2235,20 @@ def _evaluate_crop_suitability(crop: Crop, features: dict[str, float | None]) ->
         "low": "Возможно выращивание при интенсивной агротехнике: орошение, защита от стресса, подбор сортов.",
         "unsuitable": "Агроклиматические условия за пределами допустимого диапазона для культуры. Рекомендуется выбор альтернативной культуры.",
     }
+    recommendation = _recommendations.get(status, "")
+    if not seasonal_window_reliable and any(value is not None for value in (gdd_sum, precipitation_sum, temp_mean)):
+        recommendation = (
+            "Сезон ещё не завершён: климатическая пригодность оценена предварительно по доступным данным, "
+            "без жёсткой блокировки по неполному погодному окну."
+        )
+
     return {
         "status": status,
         "score": round(score, 4),
         "yield_factor": round(float(np.clip(0.35 + score * 0.70, 0.20, 1.05)), 4),
         "warnings": warnings,
         "reasons": reasons,
-        "recommendation": _recommendations.get(status, ""),
+        "recommendation": recommendation,
         "latitude": latitude,
         "seasonal_gdd_sum": gdd_sum,
         "seasonal_precipitation_mm": precipitation_sum,

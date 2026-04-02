@@ -41,6 +41,7 @@ celery.conf.update(
     task_acks_late=True,
     task_reject_on_worker_lost=True,
     worker_prefetch_multiplier=1,
+    worker_max_tasks_per_child=10,  # перезапуск дочернего процесса после N задач — предотвращает накопление фрагментации памяти
     task_time_limit=60 * 90,        # 90 min hard limit
     task_soft_time_limit=60 * 75,  # 75 min soft limit
     task_serializer="json",
@@ -50,6 +51,10 @@ celery.conf.update(
         "cleanup-expired-archives-nightly": {
             "task": "tasks.archive.cleanup_expired",
             "schedule": crontab(hour=3, minute=15),
+        },
+        "cleanup-zombie-runs-periodic": {
+            "task": "tasks.autodetect.cleanup_zombie_runs",
+            "schedule": 60 * 5,  # every 5 minutes
         },
     },
 )

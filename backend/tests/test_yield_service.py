@@ -455,3 +455,170 @@ def test_crop_suitability_penalizes_warm_season_crop_in_north():
     assert suitability['status'] in {'low', 'unsuitable'}
     assert suitability['score'] < 0.5
     assert suitability['warnings']
+
+
+def test_crop_suitability_ignores_incomplete_season_totals_for_hard_block():
+    crop = Crop(
+        id=1,
+        code='wheat',
+        name='Пшеница',
+        category='grain',
+        yield_baseline_kg_ha=4200.0,
+        ndvi_target=0.72,
+        base_temp_c=5.0,
+        description='Тестовая культура',
+    )
+    suitability = _evaluate_crop_suitability(
+        crop,
+        {
+            'latitude': 59.2,
+            'seasonal_gdd_sum': 120.0,
+            'seasonal_precipitation_mm': 14.0,
+            'seasonal_temperature_mean_c': 3.5,
+            'seasonal_observed_days': 21.0,
+        },
+        seasonal_weather={'season_year': 2026},
+    )
+
+    assert suitability['status'] != 'unsuitable'
+    assert 'seasonal_window_incomplete' in suitability['reasons']
+    assert 'не завершён' in suitability['recommendation']
+
+
+@pytest.mark.asyncio
+async def test_yield_service_keeps_prediction_supported_for_incomplete_season(monkeypatch):
+    field_id = uuid4()
+    polygon = Polygon([(30.0, 59.0), (30.1, 59.0), (30.1, 59.1), (30.0, 59.1)])
+    field = Field(
+        id=field_id,
+        organization_id=uuid4(),
+        aoi_run_id=uuid4(),
+        geom=from_shape(polygon, srid=4326),
+        area_m2=10000.0,
+        perimeter_m=400.0,
+        quality_score=0.81,
+        source='ml',
+    )
+    db = _FakeDb(field)
+    service = YieldService(db)
+    crop = Crop(
+        id=1,
+        code='wheat',
+        name='Пшеница',
+        category='grain',
+        yield_baseline_kg_ha=4200.0,
+        ndvi_target=0.72,
+        base_temp_c=5.0,
+        description='Тестовая культура',
+    )
+    monkeypatch.setattr(service.crop_service, 'get_crop_by_code', AsyncMock(return_value=crop))
+    monkeypatch.setattr(yield_service_module, 'ensure_weekly_profile', AsyncMock(return_value=[]))
+    monkeypatch.setattr(yield_service_module, 'load_crop_hint', AsyncMock(return_value={}))
+    monkeypatch.setattr(
+        service.field_analytics_service,
+        '_collect_field_metrics',
+        AsyncMock(return_value=({"ndvi": {"mean": 0.43}}, {})),
+    )
+    monkeypatch.setattr(
+        service,
+        '_seasonal_weather_summary',
+        AsyncMock(
+            return_value={
+                'season_year': 2026,
+                'gdd_sum': 120.0,
+                'precipitation_sum': 14.0,
+                'temperature_mean_c': 3.5,
+                'observed_days': 21,
+            }
+        ),
+    )
+    monkeypatch.setattr(service.temporal_analytics_service, 'get_temporal_analytics', AsyncMock(return_value={}))
+    monkeypatch.setattr(service.temporal_analytics_service, 'get_management_zones', AsyncMock(return_value={}))
+    monkeypatch.setattr(
+        service,
+        '_build_current_features',
+        AsyncMock(
+            return_value=(
+                {
+                    "crop_baseline": 4200.0,
+                    "field_area_ha": 1.0,
+                    "compactness": 0.8,
+                    "geometry_confidence": 0.81,
+                    "soil_organic_matter_pct": 3.1,
+                    "soil_ph": 6.4,
+                    "soil_n_ppm": 18.0,
+                    "soil_p_ppm": 10.0,
+                    "soil_k_ppm": 20.0,
+                    "management_total_amount": 12.0,
+                    "historical_field_mean_yield": None,
+                    "current_ndvi_mean": 0.43,
+                    "current_ndmi_mean": 0.21,
+                    "current_ndre_mean": 0.19,
+                    "current_soil_moisture": 0.22,
+                    "current_vpd_mean": 0.4,
+                    "current_precipitation_mm": 2.0,
+                    "current_wind_speed_m_s": 4.0,
+                    "seasonal_gdd_sum": 120.0,
+                    "seasonal_precipitation_mm": 14.0,
+                    "seasonal_temperature_mean_c": 3.5,
+                    "seasonal_vpd_mean": 0.3,
+                    "latitude": 59.05,
+                    "seasonal_observed_days": 21.0,
+                    "ndvi_auc": None,
+                    "ndvi_peak": None,
+                    "ndvi_mean_season": None,
+                    "_soil_texture_code": None,
+                    "_mgmt_irrigation": None,
+                    "_mgmt_fertilizer": None,
+                    "_mgmt_pesticide": None,
+                    "_mgmt_event_count": None,
+                    "_hist_n_seasons": None,
+                    "_hist_latest_year": None,
+                    "seasonal_solar_radiation_mean": None,
+                },
+                {"historical_field_mean_yield", "ndvi_auc", "ndvi_peak", "ndvi_mean_season", "_soil_texture_code", "_mgmt_irrigation", "_mgmt_fertilizer", "_mgmt_pesticide", "_mgmt_event_count", "_hist_n_seasons", "_hist_latest_year", "seasonal_solar_radiation_mean"},
+            )
+        ),
+    )
+    monkeypatch.setattr(service, '_load_training_rows', AsyncMock(return_value=[]))
+    monkeypatch.setattr(
+        service.weather_service,
+        'get_current_weather',
+        AsyncMock(
+            return_value={
+                'temperature_c': 6.0,
+                'precipitation_mm': 2.0,
+                'cloud_cover_pct': 65.0,
+                'soil_moisture': 0.22,
+                'wind_speed_m_s': 4.0,
+            }
+        ),
+    )
+    monkeypatch.setattr(
+        service.weather_service,
+        'get_forecast',
+        AsyncMock(
+            return_value={
+                'provider': 'openmeteo',
+                'days': 2,
+                'forecast': [
+                    {'date': '2026-03-23', 'temp_mean_c': 7.0, 'precipitation_mm': 1.0},
+                    {'date': '2026-03-24', 'temp_mean_c': 8.0, 'precipitation_mm': 0.0},
+                ],
+                'freshness': {'freshness_state': 'fresh'},
+            }
+        ),
+    )
+
+    payload = await service.get_or_create_prediction(
+        field_id,
+        organization_id=field.organization_id,
+        crop_code='wheat',
+        refresh=True,
+    )
+
+    assert payload['estimated_yield_kg_ha'] > 0
+    assert payload['confidence_tier'] == 'global_baseline'
+    assert payload['model_applicability']['supported'] is True
+    assert payload['operational_tier'] == 'experimental_rest'
+    assert payload['crop_suitability']['status'] != 'unsuitable'

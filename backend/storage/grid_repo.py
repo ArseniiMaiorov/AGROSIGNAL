@@ -9,7 +9,7 @@ from shapely.geometry import box, mapping
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from storage.db import GridCell
+from storage.db import Field, GridCell
 
 
 class GridRepository:
@@ -52,6 +52,7 @@ class GridRepository:
         run_id: uuid.UUID,
         zoom: int,
         bbox: tuple[float, float, float, float],
+        final_fields_only: bool = False,
     ) -> dict:
         bbox_geom = box(*bbox)
         stmt = (
@@ -61,6 +62,15 @@ class GridRepository:
             .where(GridCell.zoom_level == zoom)
             .where(GridCell.geom.ST_Intersects(from_shape(bbox_geom, srid=4326)))
         )
+        if final_fields_only:
+            field_intersection_exists = (
+                select(Field.id)
+                .where(Field.organization_id == organization_id)
+                .where(Field.aoi_run_id == run_id)
+                .where(GridCell.geom.ST_Intersects(Field.geom))
+                .exists()
+            )
+            stmt = stmt.where(field_intersection_exists)
         result = await self.session.execute(stmt)
         cells = result.scalars().all()
 

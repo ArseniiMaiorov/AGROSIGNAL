@@ -2,7 +2,7 @@
   <section class="boot-shell" data-testid="boot-shell">
     <div class="boot-card">
       <div class="boot-head">
-        <div class="boot-kicker">AgroVision boot sequence</div>
+        <div class="boot-kicker">{{ locale === 'ru' ? 'ТерраINFO — запуск системы' : 'TerraINFO — system startup' }}</div>
         <div class="boot-version">
           <span>{{ payload?.build?.app_version || '1.0.0' }}</span>
           <span v-if="payload?.build?.model_version">model {{ payload.build.model_version }}</span>
@@ -14,7 +14,7 @@
         <div v-if="isLoading" class="boot-line boot-loading">
           <span class="boot-state">[ .... ]</span>
           <span class="boot-name">bootstrap</span>
-          <span class="boot-detail">contacting `/api/v1/bootstrap`</span>
+          <span class="boot-detail">{{ locale === 'ru' ? 'запрос `/api/v1/bootstrap`' : 'contacting `/api/v1/bootstrap`' }}</span>
         </div>
         <template v-else>
           <div
@@ -31,10 +31,10 @@
       </div>
 
       <div v-if="loadError" class="boot-banner boot-error">
-        {{ locale === 'ru' ? 'Не удалось получить bootstrap-статус backend.' : 'Unable to load backend bootstrap status.' }}
+        {{ locale === 'ru' ? 'Не удалось получить статус серверной части.' : 'Unable to load backend bootstrap status.' }}
       </div>
       <div v-else-if="hasCriticalFailure" class="boot-banner boot-error">
-        {{ locale === 'ru' ? 'Критический компонент недоступен. Вход заблокирован до восстановления database/auth bootstrap.' : 'Critical component offline. Login is blocked until database/auth bootstrap recovers.' }}
+        {{ locale === 'ru' ? 'Критический компонент недоступен. Вход заблокирован до восстановления базы данных или модуля авторизации.' : 'Critical component offline. Login is blocked until database/auth bootstrap recovers.' }}
       </div>
       <div v-else-if="hasWarnings" class="boot-banner boot-warn">
         {{ locale === 'ru' ? 'Есть деградации. Вход будет разрешён, но часть функций может работать ограниченно.' : 'Degraded components detected. Login is allowed, but some functions may be limited.' }}
@@ -43,7 +43,7 @@
         {{ locale === 'ru' ? 'Проверяем критические сервисы и build metadata…' : 'Checking critical services and build metadata…' }}
       </div>
       <div v-else class="boot-banner boot-ok">
-        {{ locale === 'ru' ? 'Базовые проверки завершены. Передаю управление login shell…' : 'Bootstrap checks completed. Handing off to login shell…' }}
+        {{ locale === 'ru' ? 'Базовые проверки завершены. Передаю управление форме входа…' : 'Bootstrap checks completed. Handing off to the login screen…' }}
       </div>
 
       <div class="boot-actions">
@@ -75,34 +75,68 @@ let continueTimer = null
 let revealTimer = null
 
 const componentLabels = {
-  database: 'database',
-  redis: 'redis',
-  auth_bootstrap: 'auth bootstrap',
-  sentinel_model: 'boundary model',
-  edge_refiner: 'edge refiner',
-  classifier: 'quality scorer',
-  weather_provider: 'weather provider',
-  layer_catalog: 'layer catalog',
-  scene_cache: 'scene cache',
-  satellite_browse: 'satellite browse',
-  prediction_engine: 'prediction engine',
-  scenario_engine: 'scenario engine',
-  archive_service: 'archive service',
-  async_jobs: 'async jobs',
-  release_smoke: 'release smoke',
-  training_pipeline: 'training pipeline',
-  training_commands: 'training commands',
-  cpu_training_deps: 'cpu training deps',
-  qa_matrix: 'qa matrix',
-  qa_band_summary: 'qa band summary',
-  docs: 'docs',
+  ru: {
+    database: 'база данных',
+    redis: 'брокер redis',
+    auth_bootstrap: 'модуль авторизации',
+    sentinel_model: 'модель сегментации',
+    edge_refiner: 'уточнение границ',
+    classifier: 'оценка качества',
+    weather_provider: 'погодный провайдер',
+    layer_catalog: 'каталог слоёв',
+    scene_cache: 'кэш сцен',
+    satellite_browse: 'спутниковый просмотр',
+    prediction_engine: 'модуль прогноза',
+    scenario_engine: 'сценарный модуль',
+    archive_service: 'архивный сервис',
+    async_jobs: 'фоновые задачи',
+    release_smoke: 'дымовой тест сборки',
+    training_pipeline: 'контур обучения',
+    training_commands: 'команды обучения',
+    cpu_training_deps: 'зависимости обучения',
+    qa_matrix: 'матрица качества',
+    qa_band_summary: 'сводка по каналам',
+    docs: 'документация',
+    self_check_summary: 'итоги самопроверки',
+    build_info: 'сведения о сборке',
+  },
+  en: {
+    database: 'database',
+    redis: 'redis broker',
+    auth_bootstrap: 'auth bootstrap',
+    sentinel_model: 'segmentation model',
+    edge_refiner: 'edge refiner',
+    classifier: 'quality scorer',
+    weather_provider: 'weather provider',
+    layer_catalog: 'layer catalog',
+    scene_cache: 'scene cache',
+    satellite_browse: 'satellite browse',
+    prediction_engine: 'prediction engine',
+    scenario_engine: 'scenario engine',
+    archive_service: 'archive service',
+    async_jobs: 'async jobs',
+    release_smoke: 'release smoke test',
+    training_pipeline: 'training pipeline',
+    training_commands: 'training commands',
+    cpu_training_deps: 'cpu training deps',
+    qa_matrix: 'qa matrix',
+    qa_band_summary: 'band summary',
+    docs: 'documentation',
+    self_check_summary: 'self-check summary',
+    build_info: 'build info',
+  },
+}
+
+function getComponentLabel(name) {
+  const lang = locale.value === 'en' ? 'en' : 'ru'
+  return componentLabels[lang]?.[name] || name
 }
 
 const componentEntries = computed(() => {
   const components = payload.value?.components || {}
   const baseEntries = Object.entries(components).map(([name, entry]) => ({
     name,
-    label: componentLabels[name] || name,
+    label: getComponentLabel(name),
     status: String(entry?.status || 'unknown'),
     detail: entry?.detail ? formatDetail(entry.detail) : '',
   }))
@@ -117,13 +151,13 @@ const componentEntries = computed(() => {
     ...baseEntries,
     {
       name: 'self_check_summary',
-      label: 'self-check summary',
+      label: getComponentLabel('self_check_summary'),
       status: offline > 0 ? 'degraded' : 'online',
       detail: `online=${online}, degraded=${degraded}, offline=${offline}`,
     },
     {
       name: 'build_info',
-      label: 'build info',
+      label: getComponentLabel('build_info'),
       status: 'online',
       detail: [
         payload.value?.build?.app_version ? `app=${payload.value.build.app_version}` : null,

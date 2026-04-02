@@ -72,7 +72,7 @@ class TestSettings:
         assert s.WATERSHED_LAMBDA == 1.0
         assert s.WATERSHED_LAMBDA_CANDIDATES == (0.2, 0.5, 1.0, 2.0)
         assert s.WATERSHED_MIN_DISTANCE == 14
-        assert s.OBIA_MAX_SHAPE_INDEX == 2.0
+        assert s.OBIA_MAX_SHAPE_INDEX == 2.4
         assert s.OBIA_MAX_MEAN_NDWI == 0.2
         assert s.OWT_EDGE_WEIGHT == 0.7
         assert s.OWT_NDVI_WEIGHT == 0.3
@@ -96,8 +96,8 @@ class TestSettings:
         assert s.FEATURE_S1_FUSION is False
         assert s.FEATURE_SNIC_REFINE is False
         assert s.FEATURE_ML_PRIMARY is True
-        assert s.ML_MODEL_PATH.endswith("boundary_unet_v2.onnx")
-        assert s.ML_MODEL_NORM_STATS_PATH.endswith("boundary_unet_v2.norm.json")
+        assert s.ML_MODEL_PATH.endswith("boundary_unet_v3_cpu.onnx")
+        assert s.ML_MODEL_NORM_STATS_PATH.endswith("boundary_unet_v3_cpu.norm.json")
         assert s.ML_INFERENCE_DEVICE == "auto"
         assert s.ML_FALLBACK_ON_LOW_SCORE is True
         assert s.ML_SCORE_THRESHOLD == pytest.approx(0.35)
@@ -110,9 +110,9 @@ class TestSettings:
         assert s.ML_MULTI_SCALE_STANDARD is False
         assert s.ML_MULTI_SCALE_QUALITY is True
         assert s.ML_MULTI_SCALE_AUX_SCALES == (0.75,)
-        assert s.MODEL_VERSION == "boundary_unet_v2"
-        assert s.TRAIN_DATA_VERSION == "real_tiles_v5"
-        assert s.FEATURE_STACK_VERSION == "v5_16ch"
+        assert s.MODEL_VERSION == "boundary_unet_v3_cpu"
+        assert s.TRAIN_DATA_VERSION == "open_public_ru_v3_cpu"
+        assert s.FEATURE_STACK_VERSION == "v3_candidate_16ch_cpu"
         assert s.ONNX_OPSET_VERSION == 18
         assert s.WEATHER_HTTP_TIMEOUT_S == pytest.approx(20.0)
         assert s.WEATHER_HTTP_CONNECT_TIMEOUT_S == pytest.approx(8.0)
@@ -159,8 +159,8 @@ class TestSettings:
         assert s.WATERSHED_ROLLBACK_MAX_INTERNAL_BOUNDARY_CONF == pytest.approx(0.58)
         assert s.POST_CONVEX_MIN_HA == 1.5
         assert s.POST_CONVEX_RATIO_MAX == 1.6
-        assert s.POST_MIN_FIELD_AREA_HA == 0.7
-        assert s.NORTH_POST_MIN_FIELD_AREA_HA == pytest.approx(0.45)
+        assert s.POST_MIN_FIELD_AREA_HA == pytest.approx(0.50)
+        assert s.NORTH_POST_MIN_FIELD_AREA_HA == pytest.approx(0.35)
         assert s.POST_PX_AREA_M2 == 100
         assert s.WATERSHED_COMPACTNESS == pytest.approx(0.001)
         assert s.WATERSHED_GRADIENT_EDGE_W == 0.5
@@ -208,10 +208,10 @@ class TestSettings:
         assert s.HYBRID_SAM_MAX_FOREST_RATIO == 0.40
         assert s.HYBRID_SAM_MAX_WATER_RATIO == 0.20
         assert s.HYBRID_SNAP_TOLERANCE_M == 15.0
-        assert s.OBIA_MAX_HOLE_FRAC == 0.10
-        assert s.OBIA_MAX_HOLE_NONCROP_FRAC == 0.35
-        assert s.OBIA_MAX_INTERNAL_TREE_FRAC == 0.20
-        assert s.OBIA_MAX_INTERNAL_WATER_FRAC == 0.10
+        assert s.OBIA_MAX_HOLE_FRAC == pytest.approx(0.16)
+        assert s.OBIA_MAX_HOLE_NONCROP_FRAC == pytest.approx(0.40)
+        assert s.OBIA_MAX_INTERNAL_TREE_FRAC == pytest.approx(0.25)
+        assert s.OBIA_MAX_INTERNAL_WATER_FRAC == pytest.approx(0.14)
         assert s.POST_BOUNDARY_DILATION_PX == 1
         assert s.POST_BOUNDARY_DILATION_MAX_PX == 3
         assert s.POST_LARGE_FIELD_RESCUE_ENABLED is True
@@ -225,7 +225,7 @@ class TestSettings:
         assert s.TOPOLOGY_SIMPLIFY_ENABLED is False
         assert s.TOPOLOGY_SIMPLIFY_TOL_M == pytest.approx(1.0)
         assert s.OBIA_RELAX_IF_ML_CONFIDENT is True
-        assert s.OBIA_RELAX_MIN_BOUNDARY_CONF == pytest.approx(0.65)
+        assert s.OBIA_RELAX_MIN_BOUNDARY_CONF == pytest.approx(0.60)
         assert s.ROAD_BARRIER_SOFT_RETRY_ENABLED is True
         assert s.ROAD_CLASS_PROFILE == "major_minor"
         assert s.ROAD_MAJOR_BUFFER_PX == 2
@@ -236,7 +236,7 @@ class TestSettings:
         assert s.ROAD_SOFT_BARRIER_MINOR_ONLY is True
         assert s.ROAD_PARALLEL_EDGE_PENALTY_ENABLED is True
         assert s.ROAD_DIRECTIONAL_PENALTY_ENABLED is True
-        assert s.REGION_PROFILE_DEBUG_LOGGING is True
+        assert s.REGION_PROFILE_DEBUG_LOGGING is False
         assert s.REGION_PROFILE_RECORD_DIAGNOSTICS is True
         assert s.SOUTH_PROFILE_ENABLED is True
         assert s.SOUTH_ML_EXTENT_BIN_THRESHOLD == pytest.approx(0.34)

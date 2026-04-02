@@ -97,7 +97,7 @@ onBeforeUnmount(() => {
 <style scoped>
 .progress-shell {
   position: absolute;
-  top: 92px;
+  top: 12px;
   left: 50%;
   transform: translateX(-50%);
   width: min(460px, calc(100vw - 48px));

@@ -1,0 +1,45 @@
+\xpg@aux {babelshorthands=false}{russian}
+\contentsline {section}{Аннотация}{3}{Doc-Start}%
+\contentsline {section}{Нормативные ссылки}{3}{Doc-Start}%
+\contentsline {section}{Термины и сокращения}{4}{Item.5}%
+\contentsline {section}{\numberline {1}Общие сведения}{5}{section.1}%
+\contentsline {subsection}{\numberline {1.1}Назначение набора данных}{5}{subsection.1.1}%
+\contentsline {subsection}{\numberline {1.2}Сводные характеристики}{5}{subsection.1.2}%
+\contentsline {section}{\numberline {2}Структура хранения данных}{6}{section.2}%
+\contentsline {subsection}{\numberline {2.1}Локальное файловое хранилище}{6}{subsection.2.1}%
+\contentsline {subsection}{\numberline {2.2}Облачное хранилище Google Drive}{7}{subsection.2.2}%
+\contentsline {subsection}{\numberline {2.3}Управление данными облачного хранилища}{7}{subsection.2.3}%
+\contentsline {section}{\numberline {3}Спутниковые данные Sentinel-2}{7}{section.3}%
+\contentsline {subsection}{\numberline {3.1}Характеристики тайлов}{7}{subsection.3.1}%
+\contentsline {subsubsection}{\numberline {3.1.1}Метод формирования стека признаков}{8}{subsubsection.3.1.1}%
+\contentsline {subsection}{\numberline {3.2}Структура NPZ-файла}{9}{subsection.3.2}%
+\contentsline {subsection}{\numberline {3.3}Признаковое пространство (профиль v2\_16ch)}{9}{subsection.3.3}%
+\contentsline {subsection}{\numberline {3.4}Глобальный датасет}{16}{subsection.3.4}%
+\contentsline {subsubsection}{\numberline {3.4.1}Источники эталонных данных}{16}{subsubsection.3.4.1}%
+\contentsline {subsubsection}{\numberline {3.4.2}Состав выборок}{16}{subsubsection.3.4.2}%
+\contentsline {subsection}{\numberline {3.5}Региональные тайлы — Краснодарский край}{16}{subsection.3.5}%
+\contentsline {subsection}{\numberline {3.6}Региональные тайлы — Пермский край}{19}{subsection.3.6}%
+\contentsline {section}{\numberline {4}Метки полей}{21}{section.4}%
+\contentsline {subsection}{\numberline {4.1}Формат хранения}{21}{subsection.4.1}%
+\contentsline {subsection}{\numberline {4.2}Метод формирования слабых меток}{21}{subsection.4.2}%
+\contentsline {subsection}{\numberline {4.3}Характеристики покрытия меток по регионам}{22}{subsection.4.3}%
+\contentsline {section}{\numberline {5}Описание моделей}{22}{section.5}%
+\contentsline {subsection}{\numberline {5.1}Модель сегментации BoundaryUNet v3}{22}{subsection.5.1}%
+\contentsline {subsubsection}{\numberline {5.1.1}Архитектура}{22}{subsubsection.5.1.1}%
+\contentsline {subsubsection}{\numberline {5.1.2}Файлы модели}{24}{subsubsection.5.1.2}%
+\contentsline {subsubsection}{\numberline {5.1.3}Параметры нормализации входных данных}{24}{subsubsection.5.1.3}%
+\contentsline {subsubsection}{\numberline {5.1.4}Формирование целевых карт обучающей выборки}{24}{subsubsection.5.1.4}%
+\contentsline {subsubsection}{\numberline {5.1.5}Функция потерь}{25}{subsubsection.5.1.5}%
+\contentsline {subsubsection}{\numberline {5.1.6}Параметры обучения базовой модели}{25}{subsubsection.5.1.6}%
+\contentsline {subsection}{\numberline {5.2}Классификатор объектов}{26}{subsection.5.2}%
+\contentsline {subsubsection}{\numberline {5.2.1}Описание}{26}{subsubsection.5.2.1}%
+\contentsline {subsubsection}{\numberline {5.2.2}Входные признаки классификатора}{26}{subsubsection.5.2.2}%
+\contentsline {subsection}{\numberline {5.3}Вспомогательная модель SAM}{26}{subsection.5.3}%
+\contentsline {section}{\numberline {6}Метрики качества}{26}{section.6}%
+\contentsline {section}{\numberline {7}Параметры конфигурации системы}{26}{section.7}%
+\contentsline {section}{\numberline {8}Методология регионального дообучения}{28}{section.8}%
+\contentsline {subsection}{\numberline {8.1}Назначение}{28}{subsection.8.1}%
+\contentsline {subsection}{\numberline {8.2}Параметры регионального профиля}{28}{subsection.8.2}%
+\contentsline {subsection}{\numberline {8.3}Этапы выполнения пайплайна}{29}{subsection.8.3}%
+\contentsline {subsection}{\numberline {8.4}Запуск пайплайна}{29}{subsection.8.4}%
+\contentsline {section}{Заключение}{30}{lstnumber.-5.5}%

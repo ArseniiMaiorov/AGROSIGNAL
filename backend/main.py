@@ -15,12 +15,16 @@ from api.bootstrap import router as bootstrap_router
 from api.crops import router as crops_router
 from api.data_imports import router as data_imports_router
 from api.fields import router as fields_router
+from api.detect import router as detect_router
+from api.runs import router as runs_router
+from api.debug_tiles import router as debug_tiles_router
 from api.labeling import router as labeling_router
 from api.layers import router as layers_router
 from api.manual_markup import router as manual_markup_router
 from api.modeling import router as modeling_router
 from api.predictions import router as predictions_router
 from api.satellite import router as satellite_router
+from api.storage import router as storage_router
 from api.status import router as status_router
 from api.weather import router as weather_router
 from core.logging import configure_logging
@@ -62,9 +66,13 @@ app.add_middleware(
 app.include_router(auth_router, prefix="/api/v1")
 app.include_router(bootstrap_router, prefix="/api/v1")
 app.include_router(fields_router, prefix="/api/v1")
+app.include_router(detect_router, prefix="/api/v1")
+app.include_router(runs_router, prefix="/api/v1")
+app.include_router(debug_tiles_router, prefix="/api/v1")
 app.include_router(layers_router, prefix="/api/v1")
 app.include_router(weather_router, prefix="/api/v1")
 app.include_router(status_router, prefix="/api/v1")
+app.include_router(storage_router, prefix="/api/v1")
 app.include_router(crops_router, prefix="/api/v1")
 app.include_router(predictions_router, prefix="/api/v1")
 app.include_router(satellite_router, prefix="/api/v1")

@@ -92,7 +92,8 @@ class ERA5Client:
         """Fetch ERA5 time series for a point.
 
         Preferred path: official `cdsapi` + `~/.cdsapirc` or `ERA5_CDS_KEY`.
-        Fallback: direct HTTP request (for legacy/demo compatibility).
+        Legacy HTTP fallback is optional because the public CDS endpoint changed
+        and old `/v1/retrieve` flows now frequently return 404.
         """
         logger.info(
             "era5_fetch",
@@ -130,6 +131,7 @@ class ERA5Client:
         t0 = time.time()
         _cds_exc: Exception | None = None
         try:
+            timeout_s = max(5.0, float(getattr(self.settings, "ERA5_CDS_TIMEOUT_S", 45.0)))
             result = await asyncio.wait_for(
                 asyncio.to_thread(
                     self._retrieve_and_parse_netcdf,
@@ -137,7 +139,7 @@ class ERA5Client:
                     variables=variables,
                     request=request,
                 ),
-                timeout=300.0,  # 5 min hard cap; CDS API queue can stall indefinitely
+                timeout=timeout_s,
             )
             logger.info("era5_response", status=200, latency_s=round(time.time() - t0, 2), mode="cdsapi")
             self._write_cache(cache_file, result)
@@ -146,21 +148,22 @@ class ERA5Client:
             logger.warning(
                 "era5_cdsapi_timeout",
                 latency_s=round(time.time() - t0, 1),
-                detail="CDS API request exceeded 300 s — falling back to httpx",
+                detail=f"CDS API request exceeded {round(timeout_s, 1)} s",
             )
-            _cds_exc = TimeoutError("CDS API timeout after 300 s")
+            _cds_exc = TimeoutError(f"CDS API timeout after {round(timeout_s, 1)} s")
         except Exception as _e:
             _cds_exc = _e
 
         assert _cds_exc is not None
         skip_fallback, reason = self._should_skip_httpx_fallback(_cds_exc)
+        fallback_enabled = bool(getattr(self.settings, "ERA5_HTTP_FALLBACK_ENABLED", False))
         logger.warning(
             "era5_cdsapi_failed",
             error=str(_cds_exc),
-            fallback=None if skip_fallback else "httpx",
+            fallback="httpx" if (fallback_enabled and not skip_fallback) else None,
             reason=reason,
         )
-        if skip_fallback:
+        if skip_fallback or not fallback_enabled:
             if reason == "licenses_not_accepted":
                 logger.warning(
                     "era5_licenses_not_accepted",
@@ -169,6 +172,8 @@ class ERA5Client:
                         "https://cds.climate.copernicus.eu/datasets/reanalysis-era5-single-levels?tab=download#manage-licences"
                     ),
                 )
+            elif not fallback_enabled:
+                logger.info("era5_httpx_fallback_disabled")
             return self._empty_result(variables)
         result = await self._fallback_httpx_timeseries(
             lat=lat,
@@ -209,7 +214,7 @@ class ERA5Client:
                 f"{self.settings.ERA5_CDS_URL}/v1/retrieve",
                 json=body,
                 headers={"PRIVATE-TOKEN": self.settings.ERA5_CDS_KEY} if self.settings.ERA5_CDS_KEY else {},
-                timeout=120,
+                timeout=max(5.0, min(float(getattr(self.settings, "ERA5_CDS_TIMEOUT_S", 45.0)), 60.0)),
             )
 
         if resp.status_code != 200:

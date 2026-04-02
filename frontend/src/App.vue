@@ -4,10 +4,10 @@
 
     <div v-if="auth.isAuthenticated" class="session-strip">
       <div class="session-meta">
-        <strong>{{ auth.user?.organization_name || 'Organization' }}</strong>
+        <strong>{{ sessionOrganizationName }}</strong>
         <span>{{ auth.user?.email }}</span>
       </div>
-      <button class="session-exit" @click="handleLogout">Logout</button>
+      <button class="session-exit" @click="handleLogout">{{ t('auth.logout') }}</button>
     </div>
 
     <header v-if="store.uiWindows.weather" class="top-weather-bar">
@@ -102,7 +102,7 @@
 </template>
 
 <script setup>
-import { defineAsyncComponent, onBeforeUnmount, onMounted, ref, watch, watchEffect } from 'vue'
+import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref, watch, watchEffect } from 'vue'
 import AuthOverlay from './components/AuthOverlay.vue'
 import BootShell from './components/BootShell.vue'
 import DraggableWindow from './components/DraggableWindow.vue'
@@ -111,6 +111,7 @@ import ProgressBar from './components/ProgressBar.vue'
 import Taskbar from './components/Taskbar.vue'
 import { useAuthStore } from './store/auth'
 import { useMapStore } from './store/map'
+import { t } from './utils/i18n'
 import { initTheme, themeState } from './utils/theme'
 
 const SidePanel = defineAsyncComponent(() => import('./components/SidePanel.vue'))
@@ -126,6 +127,16 @@ const auth = useAuthStore()
 const bootCompleted = ref(false)
 const bootSequenceKey = ref(0)
 const bootstrapHints = ref(null)
+const sessionOrganizationName = computed(() => {
+  const value = String(auth.user?.organization_name || '').trim()
+  if (!value) {
+    return t('auth.organizationFallback')
+  }
+  if (value === 'Default Organization') {
+    return t('auth.defaultOrganizationName')
+  }
+  return value
+})
 
 onMounted(() => {
   initTheme()

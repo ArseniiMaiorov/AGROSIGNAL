@@ -10,9 +10,9 @@ import {
 } from '../utils/presentation'
 import { t } from '../utils/i18n'
 
-const SETTINGS_STORAGE_KEY = 'agrovision-ui-settings-v3'
-const LEGACY_SETTINGS_STORAGE_KEY = 'agrovision-ui-settings-v2'
-const LOGS_STORAGE_KEY = 'agrovision-event-log-v1'
+const SETTINGS_STORAGE_KEY = 'terrainfo-ui-settings-v3'
+const LEGACY_SETTINGS_STORAGE_KEY = 'terrainfo-ui-settings-v2'
+const LOGS_STORAGE_KEY = 'terrainfo-event-log-v1'
 const LOG_ENTRY_LIMIT = 240
 const TARGET_DATES_MIN = 1
 const TARGET_DATES_MAX = 12
@@ -325,6 +325,22 @@ export const useMapStore = defineStore('map', () => {
   const mapLabelDensity = ref('compact')
   const expertMode = ref(false)
   const beginnerMode = ref(false)
+  const storageMode = ref('local')
+  const cloudStorageUrl = ref('')
+  const storageProvider = ref('')
+  const storageProviderLabel = ref('')
+  const storageStatus = ref('local_ready')
+  const storageMessage = ref('')
+  const storageAuthState = ref('not_required')
+  const storageAuthRequired = ref(false)
+  const storageRcloneAvailable = ref(false)
+  const storageRemoteName = ref('')
+  const storageHierarchyReady = ref(false)
+  const storageWorkspaceRoot = ref('')
+  const storageWorkspaceFolders = ref([])
+  const storageAuthPrompt = ref(null)
+  const isSavingStorageConfig = ref(false)
+  const isCheckingStorageConnection = ref(false)
   const uiWindows = ref({
     control: true,
     status: true,
@@ -340,12 +356,14 @@ export const useMapStore = defineStore('map', () => {
   let predictionTimer = null
   let scenarioTimer = null
   let temporalTimer = null
+  let fieldDashboardWarmTimer = null
   let lastLoggedProgress = null
   let lastLoggedStatus = null
   let queuedDispatchWarningRunId = null
   let systemPollFailCount = 0
   let statusPollFailCount = 0
   let lastSystemErrorMsg = ''
+  let satelliteRequestSeq = 0
   const requestControllers = new Map()
   const stateSignatures = new Map()
 
@@ -387,48 +405,24 @@ export const useMapStore = defineStore('map', () => {
     _persistSettingsTimer = setTimeout(persistUiSettings, 500)
   }
 
+  // Persist primitive settings — no deep needed since these are all scalar refs
   watch(
     [
-      centerLat,
-      centerLon,
-      radiusKm,
-      startDate,
-      endDate,
-      resolutionM,
-      maxCloudPct,
-      targetDates,
-      minFieldAreaHa,
-      selectedCropCode,
-      metricsDisplayMode,
-      metricsSelectedSeries,
-      forecastGraphMode,
-      scenarioGraphMode,
-      showForecastGraphs,
-      showScenarioGraphs,
-      showScenarioFactors,
-      showScenarioRisks,
-      showManagementZonesOverlay,
-      fieldEvents,
-      fieldEventsTotal,
-      isLoadingEvents,
-      isSubmittingEvent,
-      selectedEventSeasonYear,
-      useSam,
-      showFieldsOnly,
-      detectionPreset,
-      autoRefreshIntervalS,
-      progressVerbosity,
-      animationDensity,
-      showFreshnessBadges,
-      mapLabelDensity,
-      expertMode,
-      activeLayers,
-      showSatelliteBrowse,
-      satelliteBrowseDate,
-      uiWindows,
+      centerLat, centerLon, radiusKm, startDate, endDate, resolutionM, maxCloudPct,
+      targetDates, minFieldAreaHa, selectedCropCode, metricsDisplayMode, metricsSelectedSeries,
+      forecastGraphMode, scenarioGraphMode, showForecastGraphs, showScenarioGraphs,
+      showScenarioFactors, showScenarioRisks, showManagementZonesOverlay,
+      useSam, showFieldsOnly, detectionPreset, autoRefreshIntervalS, progressVerbosity,
+      animationDensity, showFreshnessBadges, mapLabelDensity, expertMode, beginnerMode,
+      storageMode, cloudStorageUrl, showSatelliteBrowse, satelliteBrowseDate,
     ],
     debouncedPersistUiSettings,
-    { deep: true }
+  )
+  // Persist object settings separately — only these two need deep tracking
+  watch(
+    [activeLayers, uiWindows],
+    debouncedPersistUiSettings,
+    { deep: true },
   )
 
   let _persistLogsTimer = null
@@ -783,15 +777,14 @@ export const useMapStore = defineStore('map', () => {
       clearTimeout(temporalTimer)
       temporalTimer = null
     }
+    if (fieldDashboardWarmTimer) {
+      clearTimeout(fieldDashboardWarmTimer)
+      fieldDashboardWarmTimer = null
+    }
     cancelAllRequests()
   }
 
-  function clearFieldSelection() {
-    selectedField.value = null
-    selectedFieldIds.value = []
-    mergeMode.value = false
-    splitMode.value = false
-    mergeSelectionIds.value = []
+  function resetSelectedFieldPayloads() {
     fieldDashboard.value = null
     groupDashboard.value = null
     fieldTemporalAnalytics.value = null
@@ -810,7 +803,50 @@ export const useMapStore = defineStore('map', () => {
     sensitivityData.value = null
     temporalAnalyticsTaskState.value = null
     temporalAnalyticsTaskProgress.value = 0
+  }
+
+  function clearFieldSelection() {
+    selectedField.value = null
+    selectedFieldIds.value = []
+    mergeMode.value = false
+    splitMode.value = false
+    mergeSelectionIds.value = []
+    resetSelectedFieldPayloads()
     activeFieldTab.value = 'overview'
+  }
+
+  function isCurrentSingleFieldSelection(fieldId) {
+    return !hasGroupSelection.value && selectedFieldIds.value.length === 1 && selectedFieldIds.value[0] === fieldId
+  }
+
+  function scheduleFullFieldDashboardWarm(fieldId) {
+    if (fieldDashboardWarmTimer) {
+      clearTimeout(fieldDashboardWarmTimer)
+    }
+    fieldDashboardWarmTimer = window.setTimeout(() => {
+      fieldDashboardWarmTimer = null
+      if (!isCurrentSingleFieldSelection(fieldId)) {
+        return
+      }
+      void loadFieldDashboard(fieldId, {
+        backgroundFull: true,
+        warmFull: false,
+        skipSecondaryLoads: true,
+      }).finally(() => {
+        if (!isCurrentSingleFieldSelection(fieldId) || selectedFieldIsPreviewOnly.value) {
+          return
+        }
+        if (String(fieldManagementZones.value?.field_id || '') === String(fieldId)) {
+          return
+        }
+        void loadFieldManagementZones(fieldId, { silent: true })
+      })
+    }, 900)
+  }
+
+  function buildSatelliteRequestKey({ bbox, width, height, sceneDate, start, end, maxCloud }) {
+    const roundedBbox = (bbox || []).map((value) => Number(value).toFixed(5)).join(',')
+    return [roundedBbox, width, height, sceneDate || '', start || '', end || '', maxCloud || ''].join('|')
   }
 
   function promoteVisibleRun(runId, options = {}) {
@@ -1033,6 +1069,12 @@ export const useMapStore = defineStore('map', () => {
     uiWindows.value[windowId] = false
   }
 
+  function hideAllWindows() {
+    for (const key of Object.keys(uiWindows.value)) {
+      uiWindows.value[key] = false
+    }
+  }
+
   function toggleSearchCenterPicking() {
     isPickingSearchCenter.value = !isPickingSearchCenter.value
     addLog(
@@ -1050,6 +1092,109 @@ export const useMapStore = defineStore('map', () => {
     addLog(`Новый центр поиска: ${centerLat.value}, ${centerLon.value}`)
   }
 
+  function applyStoragePayload(payload) {
+    storageMode.value = payload?.storage_mode || 'local'
+    cloudStorageUrl.value = payload?.cloud_url || ''
+    storageProvider.value = payload?.provider || ''
+    storageProviderLabel.value = payload?.provider_label || ''
+    storageStatus.value = payload?.status || 'local_ready'
+    storageMessage.value = payload?.message || ''
+    storageAuthState.value = payload?.auth_state || 'not_required'
+    storageAuthRequired.value = Boolean(payload?.auth_required)
+    storageRcloneAvailable.value = Boolean(payload?.rclone_available)
+    storageRemoteName.value = payload?.remote_name || ''
+    storageHierarchyReady.value = Boolean(payload?.hierarchy_ready)
+    storageWorkspaceRoot.value = payload?.workspace_root || ''
+    storageWorkspaceFolders.value = Array.isArray(payload?.workspace_folders) ? payload.workspace_folders : []
+    storageAuthPrompt.value = payload?.auth_prompt || null
+  }
+
+  function selectStorageMode(mode) {
+    storageMode.value = mode === 'cloud' ? 'cloud' : 'local'
+    if (storageMode.value === 'local') {
+      storageAuthPrompt.value = null
+      storageStatus.value = 'local_ready'
+      storageMessage.value = ''
+      storageAuthState.value = 'not_required'
+      storageAuthRequired.value = false
+      storageProvider.value = ''
+      storageProviderLabel.value = ''
+      storageRemoteName.value = ''
+      storageHierarchyReady.value = false
+      storageWorkspaceRoot.value = ''
+      storageWorkspaceFolders.value = []
+    }
+  }
+
+  async function loadStorageSettings() {
+    const requestConfig = nextRequestConfig('storageSettings')
+    try {
+      const response = await axios.get(`${API_BASE}/storage`, requestConfig)
+      applyStoragePayload(response.data)
+      return response.data
+    } catch (requestError) {
+      if (isAbortError(requestError)) {
+        return null
+      }
+      const msg = `Не удалось загрузить настройки хранения: ${resolveError(requestError)}`
+      storageMessage.value = msg
+      addLog(msg)
+      return null
+    }
+  }
+
+  async function saveStorageSettings() {
+    isSavingStorageConfig.value = true
+    const requestConfig = nextRequestConfig('storageSave')
+    try {
+      const response = await axios.post(
+        `${API_BASE}/storage`,
+        {
+          storage_mode: storageMode.value,
+          cloud_url: storageMode.value === 'cloud' ? cloudStorageUrl.value : null,
+        },
+        requestConfig
+      )
+      applyStoragePayload(response.data)
+      addLog(response.data?.message || 'Настройки хранения обновлены.')
+      return response.data
+    } catch (requestError) {
+      if (isAbortError(requestError)) {
+        return null
+      }
+      const msg = `Не удалось сохранить режим хранения: ${resolveError(requestError)}`
+      storageMessage.value = msg
+      addLog(msg)
+      return null
+    } finally {
+      isSavingStorageConfig.value = false
+    }
+  }
+
+  async function connectCloudStorage() {
+    if (storageMode.value !== 'cloud') {
+      return null
+    }
+    isCheckingStorageConnection.value = true
+    const requestConfig = nextRequestConfig('storageConnect')
+    try {
+      const response = await axios.post(`${API_BASE}/storage/connect`, {}, requestConfig)
+      applyStoragePayload(response.data)
+      addLog(response.data?.message || 'Проверка облачного хранения завершена.')
+      return response.data
+    } catch (requestError) {
+      if (isAbortError(requestError)) {
+        return null
+      }
+      const msg = `Не удалось проверить облачное хранение: ${resolveError(requestError)}`
+      storageMessage.value = msg
+      addLog(msg)
+      return null
+    } finally {
+      isCheckingStorageConnection.value = false
+    }
+  }
+
   async function initialize() {
     restoreUiSettings()
     restoreLogs()
@@ -1061,6 +1206,7 @@ export const useMapStore = defineStore('map', () => {
       loadCrops(),
       loadPersistedFields(),
       loadManualFields(),
+      loadStorageSettings(),
     ])
     startSystemPolling()
     // Pause polling when tab is hidden, resume when visible
@@ -1087,7 +1233,7 @@ export const useMapStore = defineStore('map', () => {
       const pollTasks = [loadSystemStatus(), loadWeather()]
       // Lite field refresh: reload current_metrics, archives, scenarios — skip temporal analytics
       if (selectedFieldIds.value.length === 1 && !isLoadingFieldDashboard.value && !isDetecting.value) {
-        pollTasks.push(loadFieldDashboard(selectedFieldIds.value[0], { lite: true }))
+        pollTasks.push(loadFieldDashboard(selectedFieldIds.value[0], { lite: true, warmFull: false }))
       }
       const results = await Promise.allSettled(pollTasks)
       const anyFailed = results.some(r => r.status === 'rejected')
@@ -1227,6 +1373,13 @@ export const useMapStore = defineStore('map', () => {
           visibleRunId.value = latestCompleted.id
         }
       }
+      // Resume progress bar if a task is running/queued but frontend lost track (e.g. after page reload)
+      const activeRun = runSummaries.value.find((run) => ['running', 'queued'].includes(run.status))
+      if (activeRun && !isDetecting.value) {
+        activeRunId.value = activeRun.id
+        isDetecting.value = true
+        pollStatus()
+      }
       return runSummaries.value
     } catch (requestError) {
       if (isAbortError(requestError)) {
@@ -1253,8 +1406,20 @@ export const useMapStore = defineStore('map', () => {
     isLoadingFieldDashboard.value = true
     const requestConfig = nextRequestConfig('fieldDashboard')
     try {
-      const response = await axios.get(`${API_BASE}/fields/${fieldId}/dashboard`, requestConfig)
-      const mergedPrediction = mergePredictionPayload(selectedFieldPrediction.value, response.data?.prediction || null)
+      const params = {}
+      if (options.lite) {
+        params.lite = true
+      }
+      const response = await axios.get(`${API_BASE}/fields/${fieldId}/dashboard`, {
+        ...requestConfig,
+        params,
+      })
+      if (!isCurrentSingleFieldSelection(fieldId)) {
+        return null
+      }
+      const existingPrediction =
+        selectedFieldPrediction.value?.field_id === fieldId ? selectedFieldPrediction.value : null
+      const mergedPrediction = mergePredictionPayload(existingPrediction, response.data?.prediction || null)
       fieldDashboard.value = {
         ...(response.data || {}),
         prediction: mergedPrediction,
@@ -1292,13 +1457,23 @@ export const useMapStore = defineStore('map', () => {
           activeFieldTab.value = 'overview'
         }
       }
+      const shouldWarmFull =
+        Boolean(options.lite) &&
+        options.warmFull !== false &&
+        !options.backgroundFull &&
+        !hasGroupSelection.value &&
+        selectedFieldIds.value.length === 1 &&
+        selectedFieldIds.value[0] === fieldId
+      if (shouldWarmFull) {
+        scheduleFullFieldDashboardWarm(fieldId)
+      }
       if (!options.lite) {
         const currentSeasonRange = buildCurrentSeasonDateRange()
         const preferExisting = isSameField
-        const dashboardLoads = [
-          loadFieldTemporalAnalytics(fieldId, { silent: true, preferExisting, target: 'metrics' }),
-        ]
-        if (!previewOnlyField) {
+        const dashboardLoads = options.skipSecondaryLoads
+          ? []
+          : [loadFieldTemporalAnalytics(fieldId, { silent: true, preferExisting, target: 'metrics' })]
+        if (!previewOnlyField && !options.skipSecondaryLoads) {
           dashboardLoads.push(
             loadFieldTemporalAnalytics(fieldId, {
               silent: true,
@@ -1376,7 +1551,7 @@ export const useMapStore = defineStore('map', () => {
     if (selectedFieldIds.value.length > 1) {
       return loadGroupDashboard([...selectedFieldIds.value])
     }
-    return loadFieldDashboard(selectedFieldIds.value[0])
+    return loadFieldDashboard(selectedFieldIds.value[0], { lite: true })
   }
 
   async function loadArchiveView(archiveId) {
@@ -1441,6 +1616,9 @@ export const useMapStore = defineStore('map', () => {
       if (cropCode) params.crop_code = cropCode
       const response = await axios.get(`${API_BASE}/fields/${fieldId}/temporal-analytics`, { ...requestConfig, params })
       const payload = response.data || null
+      if (!isCurrentSingleFieldSelection(fieldId)) {
+        return null
+      }
       if (payload) {
         target.dataRef.value = payload
         target.keyRef.value = cacheKey
@@ -1553,6 +1731,9 @@ export const useMapStore = defineStore('map', () => {
     const requestConfig = nextRequestConfig('fieldManagementZones')
     try {
       const response = await axios.get(`${API_BASE}/fields/${fieldId}/management-zones`, requestConfig)
+      if (!isCurrentSingleFieldSelection(fieldId) || String(response.data?.field_id || '') !== String(fieldId)) {
+        return fieldManagementZones.value
+      }
       fieldManagementZones.value = response.data
       if (!options.silent) {
         addLog(`Зоны управления ${response.data?.summary?.supported ? 'обновлены' : 'недоступны'} для поля ${fieldId}`)
@@ -1583,6 +1764,7 @@ export const useMapStore = defineStore('map', () => {
       const params = {}
       if (selectedEventSeasonYear.value) params.season_year = selectedEventSeasonYear.value
       const response = await axios.get(`${API_BASE}/fields/${fieldId}/events`, { ...requestConfig, params })
+      if (!isCurrentSingleFieldSelection(fieldId)) return fieldEvents.value
       fieldEvents.value = response.data.events || []
       fieldEventsTotal.value = response.data.total || 0
       if (!options.silent) addLog(`Загружено событий: ${fieldEventsTotal.value}`)
@@ -1595,6 +1777,20 @@ export const useMapStore = defineStore('map', () => {
       isLoadingEvents.value = false
     }
   }
+
+  watch(
+    () => [showManagementZonesOverlay.value, selectedFieldIds.value[0] || null, hasGroupSelection.value],
+    ([overlayEnabled, fieldId, groupSelection]) => {
+      if (!overlayEnabled || !fieldId || groupSelection || selectedFieldIsPreviewOnly.value) {
+        return
+      }
+      if (String(fieldManagementZones.value?.field_id || '') === String(fieldId)) {
+        return
+      }
+      void loadFieldManagementZones(fieldId, { silent: true })
+    },
+    { immediate: true },
+  )
 
   async function createFieldEvent(fieldId, eventData) {
     isSubmittingEvent.value = true
@@ -1758,6 +1954,27 @@ export const useMapStore = defineStore('map', () => {
         const elapsedS = Number(response.data.elapsed_s || 0)
         if (elapsedS >= 8 && queuedDispatchWarningRunId !== activeRunId.value) {
           queuedDispatchWarningRunId = activeRunId.value
+          const queueAhead = Math.max(0, Number(response.data.queue_ahead || 0))
+          const blockingRunId = String(response.data.blocking_run_id || '').trim()
+          const blockingStatus = String(response.data.blocking_status || '').trim()
+          if (queueAhead > 0) {
+            const shortBlockingRunId = blockingRunId ? blockingRunId.slice(0, 8) : ''
+            const blockingStatusLabel = blockingStatus === 'running'
+              ? 'выполняется'
+              : blockingStatus === 'queued'
+                ? 'в очереди'
+                : blockingStatus
+            const blockerNote = shortBlockingRunId
+              ? ` Сейчас выполняется предыдущий запуск ${shortBlockingRunId}${blockingStatusLabel ? ` (${blockingStatusLabel})` : ''}.`
+              : ''
+            addLog({
+              message: `Новый детект поставлен в очередь: перед ним ${queueAhead} активн${queueAhead === 1 ? 'ая задача' : queueAhead < 5 ? 'ые задачи' : 'ых задач'}.${blockerNote}`,
+              severity: 'warning',
+              category: 'detect',
+              code: 'detect_queue_waiting',
+              runId: activeRunId.value,
+            })
+          } else {
           addLog({
             message: 'Worker ещё не забрал задачу детекта. Проверь backend-api/celery-worker.',
             severity: 'warning',
@@ -1765,6 +1982,7 @@ export const useMapStore = defineStore('map', () => {
             code: 'detect_queue_delay',
             runId: activeRunId.value,
           })
+          }
         }
       }
       statusPollFailCount = 0
@@ -1773,12 +1991,12 @@ export const useMapStore = defineStore('map', () => {
       if (isAbortError(requestError)) {
         return
       }
-      statusPollFailCount = Math.min(statusPollFailCount + 1, 5)
+      statusPollFailCount = Math.min(statusPollFailCount + 1, 3)
       if (statusPollFailCount <= 1) {
         addLog(`Ошибка опроса статуса: ${resolveError(requestError)}`)
       }
-      const backoffMs = 5000 * Math.pow(2, statusPollFailCount - 1)
-      statusTimer = window.setTimeout(pollStatus, Math.min(backoffMs, 60_000))
+      const backoffMs = 2000 * Math.pow(2, statusPollFailCount - 1)
+      statusTimer = window.setTimeout(pollStatus, Math.min(backoffMs, 8_000))
     }
   }
 
@@ -1859,10 +2077,12 @@ export const useMapStore = defineStore('map', () => {
   async function loadSatelliteScene({ bbox, width, height, manual = false } = {}) {
     cancelRequest('satellite')
     if (!showSatelliteBrowse.value || !bbox) {
+      satelliteRequestSeq += 1
       satelliteScene.value = null
       satelliteLoadStatus.value = 'idle'
       return null
     }
+    const requestSeq = ++satelliteRequestSeq
     satelliteLoadStatus.value = 'loading'
     const requestConfig = nextRequestConfig('satellite')
     try {
@@ -1880,20 +2100,43 @@ export const useMapStore = defineStore('map', () => {
       if (satelliteBrowseDate.value) {
         params.scene_date = satelliteBrowseDate.value
       }
+      const requestKey = buildSatelliteRequestKey({
+        bbox,
+        width,
+        height,
+        sceneDate: params.scene_date,
+        start: params.start_date,
+        end: params.end_date,
+        maxCloud: params.max_cloud_pct,
+      })
       const response = await axios.get(`${API_BASE}/satellite/true-color`, {
         ...requestConfig,
         params,
       })
-      satelliteScene.value = response.data
-      satelliteLoadStatus.value = 'ready'
-      if (manual) {
-        const cloud = response.data?.cloud_cover_pct
-        const cloudLabel = cloud === null || cloud === undefined ? 'облачность —' : `облачность ${Number(cloud).toFixed(0)}%`
-        addLog(`Спутниковая сцена обновлена · ${cloudLabel} · аккаунт ${response.data?.provider_account || 'primary'}`)
+      if (requestSeq !== satelliteRequestSeq) {
+        return satelliteScene.value
       }
-      return response.data
+      const sceneStatus = response.data?.status || (response.data?.image_base64 ? 'ready' : 'no_data')
+      satelliteScene.value = {
+        ...(response.data || {}),
+        request_key: requestKey,
+      }
+      satelliteLoadStatus.value = sceneStatus === 'no_data' ? 'no_data' : 'ready'
+      if (manual) {
+        if (sceneStatus === 'no_data') {
+          addLog('На выбранную дату не нашлось пригодной спутниковой сцены. Попробуйте снять точную дату или расширить окно поиска.')
+        } else {
+          const cloud = response.data?.cloud_cover_pct
+          const cloudLabel = cloud === null || cloud === undefined ? 'облачность —' : `облачность ${Number(cloud).toFixed(0)}%`
+          addLog(`Спутниковая сцена обновлена · ${cloudLabel} · аккаунт ${response.data?.provider_account || 'primary'}`)
+        }
+      }
+      return satelliteScene.value
     } catch (requestError) {
       if (isAbortError(requestError)) {
+        return satelliteScene.value
+      }
+      if (requestSeq !== satelliteRequestSeq) {
         return satelliteScene.value
       }
       satelliteLoadStatus.value = 'error'
@@ -1928,6 +2171,9 @@ export const useMapStore = defineStore('map', () => {
       clearFieldSelection()
       return
     }
+    const nextFieldId = fieldProperties.field_id
+    const currentFieldId = selectedField.value?.field_id
+    const isFieldSwitch = !additive && nextFieldId !== currentFieldId
 
     if (additive) {
       const next = new Set(selectedFieldIds.value)
@@ -1945,6 +2191,10 @@ export const useMapStore = defineStore('map', () => {
     } else {
       selectedFieldIds.value = [fieldProperties.field_id]
       selectedField.value = fieldProperties
+    }
+
+    if (isFieldSwitch) {
+      resetSelectedFieldPayloads()
     }
 
     if (!isDetecting.value && fieldProperties?.aoi_run_id) {
@@ -2417,15 +2667,17 @@ export const useMapStore = defineStore('map', () => {
         detectionPreset: detectionPreset.value,
         autoRefreshIntervalS: autoRefreshIntervalS.value,
         progressVerbosity: progressVerbosity.value,
-        animationDensity: animationDensity.value,
-        showFreshnessBadges: showFreshnessBadges.value,
-        mapLabelDensity: mapLabelDensity.value,
-        expertMode: expertMode.value,
-        beginnerMode: beginnerMode.value,
-        showSatelliteBrowse: showSatelliteBrowse.value,
-        satelliteBrowseDate: satelliteBrowseDate.value,
-        activeLayers: activeLayers.value,
-        uiWindows: uiWindows.value,
+      animationDensity: animationDensity.value,
+      showFreshnessBadges: showFreshnessBadges.value,
+      mapLabelDensity: mapLabelDensity.value,
+      expertMode: expertMode.value,
+      beginnerMode: beginnerMode.value,
+      storageMode: storageMode.value,
+      cloudStorageUrl: cloudStorageUrl.value,
+      showSatelliteBrowse: showSatelliteBrowse.value,
+      satelliteBrowseDate: satelliteBrowseDate.value,
+      activeLayers: activeLayers.value,
+      uiWindows: uiWindows.value,
       })
     )
   }
@@ -2473,6 +2725,8 @@ export const useMapStore = defineStore('map', () => {
       mapLabelDensity.value = value.mapLabelDensity || mapLabelDensity.value
       expertMode.value = Boolean(value.expertMode ?? expertMode.value)
       beginnerMode.value = Boolean(value.beginnerMode ?? beginnerMode.value)
+      storageMode.value = value.storageMode || storageMode.value
+      cloudStorageUrl.value = value.cloudStorageUrl || cloudStorageUrl.value
       showSatelliteBrowse.value = Boolean(value.showSatelliteBrowse ?? showSatelliteBrowse.value)
       satelliteBrowseDate.value = value.satelliteBrowseDate || satelliteBrowseDate.value
       if (value.activeLayers && typeof value.activeLayers === 'object') {
@@ -2895,6 +3149,22 @@ export const useMapStore = defineStore('map', () => {
     mapLabelDensity,
     expertMode,
     beginnerMode,
+    storageMode,
+    cloudStorageUrl,
+    storageProvider,
+    storageProviderLabel,
+    storageStatus,
+    storageMessage,
+    storageAuthState,
+    storageAuthRequired,
+    storageRcloneAvailable,
+    storageRemoteName,
+    storageHierarchyReady,
+    storageWorkspaceRoot,
+    storageWorkspaceFolders,
+    storageAuthPrompt,
+    isSavingStorageConfig,
+    isCheckingStorageConnection,
     uiWindows,
     addLog,
     persistLogs,
@@ -2935,9 +3205,14 @@ export const useMapStore = defineStore('map', () => {
     toggleWindow,
     showWindow,
     hideWindow,
+    hideAllWindows,
     clearFieldSelection,
     toggleSearchCenterPicking,
     applySearchCenter,
+    selectStorageMode,
+    loadStorageSettings,
+    saveStorageSettings,
+    connectCloudStorage,
     createManualField,
     startMergeMode,
     cancelMergeMode,

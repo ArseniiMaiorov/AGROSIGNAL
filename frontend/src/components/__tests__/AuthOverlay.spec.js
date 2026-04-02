@@ -24,6 +24,7 @@ describe('AuthOverlay', () => {
     const inputs = wrapper.findAll('input')
     expect(inputs[0].element.value).toBe('admin@local')
     expect(inputs[2].element.value).toBe('default-organization')
-    expect(wrapper.text()).toContain('Default Organization')
+    expect(wrapper.text()).toContain('Организация по умолчанию')
+    expect(wrapper.text()).toContain('ТерраINFO')
   })
 })

@@ -206,11 +206,11 @@ class SentinelHubClient:
 
         _append("primary", self.settings.SH_CLIENT_ID, self.settings.SH_CLIENT_SECRET)
         if bool(getattr(self.settings, "SH_FAILOVER_ENABLED", True)):
-            _append("reserv", getattr(self.settings, "SH_CLIENT_ID_reserv", None), getattr(self.settings, "SH_CLIENT_SECRET_reserv", None))
+            _append("reserve", getattr(self.settings, "SH_CLIENT_ID_RESERVE", None), getattr(self.settings, "SH_CLIENT_SECRET_RESERVE", None))
             _append(
-                "second_reserv",
-                getattr(self.settings, "SH_CLIENT_ID_second_reserv", None),
-                getattr(self.settings, "SH_CLIENT_SECRET_second_reserv", None),
+                "second_reserve",
+                getattr(self.settings, "SH_CLIENT_ID_SECOND_RESERVE", None),
+                getattr(self.settings, "SH_CLIENT_SECRET_SECOND_RESERVE", None),
             )
         return accounts
 
